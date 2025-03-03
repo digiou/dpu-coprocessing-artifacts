@@ -1,0 +1,9 @@
+{
+    "dependencies": [
+      "lz4",
+      "re2",
+      "zlib",
+      "nlohmann-json"
+    ]
+}
+  

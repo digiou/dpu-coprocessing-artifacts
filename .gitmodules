@@ -1,0 +1,3 @@
+[submodule "experiments/local-compress/corpora"]
+	path = experiments/local-compress/corpora
+	url = https://github.com/zlib-ng/corpora.git

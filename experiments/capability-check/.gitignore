@@ -1,0 +1,10 @@
+build/
+
+# Mounted source dirs from DOCA container
+container-applications/*/
+container-include/*/
+container-samples/*/
+container-tools/*/
+
+# vscode
+.vscode

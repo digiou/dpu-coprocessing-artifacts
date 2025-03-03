@@ -1,0 +1,16 @@
+*.txt
+!requirements.txt
+doca_compression_local.p/
+doca_compression_local
+
+# External binaries that need local build
+bin/TurboBench/
+
+# Mounted source dirs from DOCA container
+container-applications/*/
+container-include/*/
+container-samples/*/
+container-tools/*/
+
+# vscode
+.vscode

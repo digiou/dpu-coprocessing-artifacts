@@ -1,0 +1,27 @@
+*.txt
+!requirements.txt
+!CMakeLists.txt
+# Ignore all CSV files in the root directory
+/*.csv
+
+# Allow CSV files in subdirectories
+!*/**/*.csv
+
+# Mounted source dirs from DOCA container
+container-applications/*/
+container-include/*/
+container-samples/*/
+container-tools/*/
+
+# IDE dirs inside the container
+.vscode*
+.idea*
+
+### vcpkg ###
+# Vcpkg
+vcpkg/
+
+vcpkg-manifest-install.log
+
+## Manifest Mode
+vcpkg_installed/
