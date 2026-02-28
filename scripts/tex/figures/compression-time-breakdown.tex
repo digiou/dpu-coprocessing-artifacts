@@ -1,0 +1,49 @@
+\begin{tikzpicture}
+    \begin{axis}[
+        xbar=0pt,
+        scale only axis,
+        width=\columnwidth, 
+        height=3cm,
+        xmin=0,
+        xmax=0.32,
+        bar width=0.26cm,
+        % enlarge y limits=0.25,
+        xlabel={Time (s)},
+        xlabel style={yshift=3pt},   % move X label closer to the axis
+        symbolic y coords={Context End, ASIC, Device Disc., Mem. Init, Context Init},
+        y tick label style={align=center},
+        ytick=data,
+        xmajorgrids=true,
+        nodes near coords,
+        style={xshift=0pt,yshift=0pt},
+        legend style={
+            legend columns=-1,
+            draw=none,
+            fill=none,
+            anchor=north east,
+            at={(0.87,1.175)}
+        },
+    ]
+
+    \pgfplotstableread[col sep=comma]{figures/results/avg_time_breakdown.csv}\avgtable
+
+    % Plot for BF2+BF3 averages
+    % keep results in macros (first row = row 0)
+    \pgfplotstablegetelem{0}{cb_end}\of\avgtable \let\cbend\pgfplotsretval
+    \pgfplotstablegetelem{0}{cb_time}\of\avgtable \let\cbtime\pgfplotsretval
+    \pgfplotstablegetelem{0}{dev_time}\of\avgtable \let\devtime\pgfplotsretval
+    \pgfplotstablegetelem{0}{mem_time}\of\avgtable \let\memtime\pgfplotsretval
+    \pgfplotstablegetelem{0}{ctx_time}\of\avgtable \let\ctxtime\pgfplotsretval
+
+    \addplot+
+    coordinates {
+        (\cbend,Context End) % cb_end
+        (\cbtime,ASIC) % cb_time
+        (\devtime,Device Disc.) % dev_time
+        (\memtime,Mem. Init) % mem_time
+        (\ctxtime,Context Init) % ctx_time
+    };
+    \addlegendentry{BF2 + BF3 Averages}
+
+    \end{axis}
+\end{tikzpicture}

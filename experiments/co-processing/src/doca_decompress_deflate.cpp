@@ -226,22 +226,52 @@ doca_error_t DecompressDeflateConsumer::openDocaDevice() {
     struct doca_devinfo **dev_list;
     uint32_t nb_devs;
     doca_error_t err;
+    uint8_t is_addr_equal = 0;
+    const char* pcie_addr = "87:00.0";
+    const char* pcie_addr_second = "87:00.1";
+    const char* pcie_addr_dpu0 = "67:00.0";
+    const char* pcie_addr_dpu0_second = "67:00.1";
 
     err = doca_devinfo_create_list(&dev_list, &nb_devs);
     if(err != DOCA_SUCCESS) {
         return err;
     }
+    std::cout << "Found " << nb_devs << " devices" << std::endl;
 
+    err = DOCA_ERROR_NOT_FOUND;
     for(uint32_t i = 0; i < nb_devs; ++i) {
+        doca_devinfo_is_equal_pci_addr(dev_list[i], pcie_addr_dpu0, &is_addr_equal);
+        if (is_addr_equal) {
+            is_addr_equal = 0;
+            std::cout << "We found DPU0, skipping..." << std::endl;
+            continue;
+        }
+        doca_devinfo_is_equal_pci_addr(dev_list[i], pcie_addr_dpu0_second, &is_addr_equal);
+        if (is_addr_equal) {
+            is_addr_equal = 0;
+            std::cout << "We found DPU0 second, skipping..." << std::endl;
+            continue;
+        }
         if(doca_compress_cap_task_decompress_deflate_is_supported(dev_list[i]) == DOCA_SUCCESS) {
             if(doca_dev_open(dev_list[i], &this->device) == DOCA_SUCCESS) {
-                doca_devinfo_destroy_list(dev_list);
-                return DOCA_SUCCESS;
+                err = DOCA_SUCCESS;
+                doca_devinfo_is_equal_pci_addr(dev_list[i], pcie_addr, &is_addr_equal);
+                if (is_addr_equal) {
+                    std::cout << "We chose DPU1" << std::endl;
+                }
+                doca_devinfo_is_equal_pci_addr(dev_list[i], pcie_addr_second, &is_addr_equal);
+                if (is_addr_equal) {
+                    std::cout << "We chose DPU1 second" << std::endl;
+                }
+                break;
+            } else {
+                std::cout << "Failed to open capable device " << i << ", due to: " << doca_error_get_descr(err) << std::endl;
             }
         }
     }
+    doca_devinfo_destroy_list(dev_list);
 
-    return DOCA_ERROR_NOT_FOUND;
+    return err;
 }
 
 doca_error_t DecompressDeflateConsumer::prepareMmaps(uint32_t in_permissions, uint32_t out_permissions) {
@@ -436,6 +466,9 @@ doca_error_t DecompressDeflateConsumer::pollTillCompletion() {
 void DecompressDeflateConsumer::executeDocaTask() {
     // 11. submit array of tasks
     this->submit_start = std::chrono::steady_clock::now();
+    timespec ts;
+    clock_gettime(CLOCK_THREAD_CPUTIME_ID, &ts);
+    this->thread_time_start = ts.tv_sec + ts.tv_nsec * 1e-9;
 
     auto result = this->submitCompressTasks();
     if (result != DOCA_SUCCESS) {
@@ -450,6 +483,8 @@ void DecompressDeflateConsumer::executeDocaTask() {
         std::cout << "DOCA Task polling has errors" << std::endl;
     }
 
+    clock_gettime(CLOCK_THREAD_CPUTIME_ID, &ts);
+    this->thread_time_end = ts.tv_sec + ts.tv_nsec * 1e-9;
     this->busy_wait_end = std::chrono::steady_clock::now();
 }
 
@@ -594,9 +629,15 @@ std::vector<std::string> DecompressDeflateConsumer::getDocaResults() {
     // from last success cb to busy-wait end
     auto cb_end_elapsed = this->calculateSeconds(this->busy_wait_end, this->state_obj.end);
 
+    // cpu+sys time from submission to end of busy-wait
+    auto cpu_time_elapsed = this->thread_time_end - this->thread_time_start;
+    std::ostringstream oss;
+    oss << std::fixed << std::setprecision(8) << cpu_time_elapsed;
+    std::string thread_time_elapsed = oss.str();
+
     // Create vector of results
     return std::vector<std::string>{overall_submission_elapsed, task_submission_elapsed, 
-        busy_wait_elapsed, cb_elapsed, cb_end_elapsed, ctx_stop_elapsed};
+        busy_wait_elapsed, cb_elapsed, cb_end_elapsed, ctx_stop_elapsed, thread_time_elapsed};
     
     // 8. prepare dest buf for writing
     // doca_buf_get_data_len(this->dst_doca_buf, &this->input_file_size);

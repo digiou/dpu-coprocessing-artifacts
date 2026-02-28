@@ -417,6 +417,9 @@ doca_error_t CompressConsumer::pollTillCompletion() {
 void CompressConsumer::executeDocaTask() {
     // 11. submit array of tasks
     this->submit_start = std::chrono::steady_clock::now();
+    timespec ts;
+    clock_gettime(CLOCK_THREAD_CPUTIME_ID, &ts);
+    this->thread_time_start = ts.tv_sec + ts.tv_nsec * 1e-9;
 
     auto result = this->submitCompressTasks();
     if (result != DOCA_SUCCESS) {
@@ -431,6 +434,8 @@ void CompressConsumer::executeDocaTask() {
         std::cout << "DOCA Task polling has errors" << std::endl;
     }
 
+    clock_gettime(CLOCK_THREAD_CPUTIME_ID, &ts);
+    this->thread_time_end = ts.tv_sec + ts.tv_nsec * 1e-9;
     this->busy_wait_end = std::chrono::steady_clock::now();
 }
 
@@ -574,9 +579,15 @@ std::vector<std::string> CompressConsumer::getDocaResults() {
     // from last success cb to busy-wait end
     auto cb_end_elapsed = this->calculateSeconds(this->busy_wait_end, this->state_obj.end);
 
+    // cpu+sys time from submission to end of busy-wait
+    auto cpu_time_elapsed = this->thread_time_end - this->thread_time_start;
+    std::ostringstream oss;
+    oss << std::fixed << std::setprecision(8) << cpu_time_elapsed;
+    std::string thread_time_elapsed = oss.str();
+
     // Create vector of results
     return std::vector<std::string>{overall_submission_elapsed, task_submission_elapsed, 
-        busy_wait_elapsed, cb_elapsed, cb_end_elapsed, ctx_stop_elapsed};
+        busy_wait_elapsed, cb_elapsed, cb_end_elapsed, ctx_stop_elapsed, thread_time_elapsed};
     
     // 8. prepare dest buf for writing
     // doca_buf_get_data_len(this->dst_doca_buf, &this->input_file_size);

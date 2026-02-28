@@ -1,0 +1,355 @@
+% VLDB template version of 2020-08-03 enhances the ACM template, version 1.7.0:
+% https://www.acm.org/publications/proceedings-template
+% The ACM Latex guide provides further information about the ACM template
+
+\documentclass[sigconf, nonacm]{acmart}
+\usepackage[utf8]{inputenc}
+\usepackage[T1]{fontenc}
+\usepackage{colorprofiles}
+\usepackage[a-2b,mathxmp]{pdfx}[2018/12/22]
+\usepackage{tikz}
+\usetikzlibrary{patterns,shapes.arrows,calc,pgfplots.groupplots}
+\usepackage{pgfplots}
+\usepgfplotslibrary{groupplots,dateplot,statistics}
+\pgfplotsset{compat=1.18}
+\usepackage{pgfplotstable}
+\usepackage{wrapfig}
+\usepackage{standalone}
+\usepackage{caption}
+\usepackage{subcaption}
+\usepackage{siunitx}
+\usepackage{algorithm2e}
+\usepackage{wrapfig}
+\usepackage{multicol}
+\usepackage{diagbox}
+\usepackage{makecell}
+\usepackage{cleveref}
+\usepackage{colortbl}      % Required for \cellcolor
+\usepackage{diagbox}
+\usepackage{balance}
+\usepackage{hyperref}
+\hypersetup{pdfstartview=}
+
+% tol-muted color scheme
+\definecolor{tol_indigo}{RGB}{51,34,136}
+\definecolor{tol_cyan}{RGB}{136,204,238}
+\definecolor{tol_teal}{RGB}{68,170,153}
+\definecolor{tol_green}{RGB}{17,119,51}
+\definecolor{tol_olive}{RGB}{153,153,51}
+\definecolor{tol_sand}{RGB}{221,204,119}
+\definecolor{tol_rose}{RGB}{204,102,119}
+\definecolor{tol_wine}{RGB}{136,34,85}
+\definecolor{tol_purple}{RGB}{170,68,153}
+\definecolor{tol_palegrey}{RGB}{221,221,221}
+
+% tol-vibrant additional
+\definecolor{tol_blue}{RGB}{0,119,187}
+
+%% The following content must be adapted for the final version
+% paper-specific
+\newcommand\vldbdoi{XX.XX/XXX.XX}
+\newcommand\vldbpages{XXX-XXX}
+% issue-specific
+\newcommand\vldbvolume{14}
+\newcommand\vldbissue{1}
+\newcommand\vldbyear{2020}
+% should be fine as it is
+\newcommand\vldbauthors{\authors}
+\newcommand\vldbtitle{\shorttitle} 
+% leave empty if no availability url should be set
+\newcommand\vldbavailabilityurl{URL_TO_YOUR_ARTIFACTS}
+% whether page numbers should be shown or not, use 'plain' for review versions, 'empty' for camera ready
+\newcommand\vldbpagestyle{plain} 
+
+\begin{document}
+\title{Reproducibility Results for ``Analyzing Near-Network Hardware Acceleration with Co-Processing on DPUs''}
+
+\maketitle
+
+%%% do not modify the following VLDB block %%
+%%% VLDB block start %%%
+\ifdefempty{\vldbavailabilityurl}{}{
+\vspace{.3cm}
+\begingroup\small\noindent\raggedright\textbf{PVLDB Artifact Availability:}\\
+The source code, data, and/or other artifacts have been made available at \url{\vldbavailabilityurl}.
+\endgroup
+}
+%%% VLDB block end %%%
+
+\section{Goal of this document}
+This document has two roles: first it serves as documentation
+on \textit{how} to reproduce the results of the original paper
+and second, it is the \textit{means} of reproducing the paper.
+What I mean with that is that first I'm gonna describe how to execute the scripts
+that execute the same experiments that I created to write this paper.
+Then, a newly rendered version of this document with updated figures will be the
+end-result of our script's pipeline, where the figures use CSVs from the experiments
+we just executed, ready for the reviewers to compare against the original paper.
+
+\section{Issues encountered}
+\label{sec:issues}
+I mainly encountered 3 problems while preparing for reproducibility, which affect both
+\textit{how} I prepared and the \textit{results} I got:
+\begin{itemize}
+    \item NVIDIA changes DOCA APIs and firmware
+    \item NVIDIA eliminated a whole accelerator from their cards
+    \item TU Berlin is conservative with remote access
+\end{itemize}
+
+I'll go through each problem one-by-one in the following subsections,
+explaining how they affect this reproducibility submission.
+
+\subsection{NVIDIA changes DOCA APIs and firmware}
+This mainly affects results from BlueField 2 (hereon BF2) after BlueField 3 (hereon BF3)
+came to market.
+Originally, BF2 allowed for DOCA buffer sizes up $\leq128 MiB$, this can be checked
+with the task-specific max buffer size methods\footnote{\url{https://docs.nvidia.com/doca/sdk/DOCA-Compress/index.html\#src-4464415601_id-.DOCACompressv3.2.0LC-SupportedBufferSize}}.
+When BF3 released (Firmware and DOCA version 2.0.1)\footnote{\url{https://docs.nvidia.com/doca/archive/doca-v2.0.2/release-notes/index.html}},
+the max buffer size was different from BF2, specifically it did not exceed 2 MiB.
+Since our admins updated BF2 to v2.9.0, I had to re-use
+code that uses variable length input  $\leq2 MiB$ before passing it to BF2. 
+The reason is that all APIs were updated after v2.2.0/v2.2.1 (split BF2/BF3 release) 
+to enforce uniform buffer sizes between both BF2 and BF3.
+
+\textbf{What this means for this submission}
+Experiments that involve BF2 are going to produce different results.
+From our findings, they are going to be slower.
+
+\subsection{NVIDIA eliminated a whole accelerator from their cards}
+Once BF3 released, there was less focus on BF2 outside of unifying the software stack
+around version 2.5.0\footnote{\url{https://docs.nvidia.com/doca/archive/doca-v2-5-0/NVIDIA+DOCA+Release+Notes/index.html}}.
+This is the first time where there won't be development headers for the
+Regex engine on DOCA anymore, regardless if it was on BF3 or BF2.
+Moreover, it was hard to find information on CLI-based tools from Mellanox
+themselves, like the RXP regex compiler which we used when our cards were on v2.2.0.
+
+The real reason for that decision from NVIDIA is that the Regex engine is a relic from
+Mellanox times and is necessary for BlueFields to perform their main function:
+filter traffic packets since they treat headers as strings. 
+There is very limited information on which ASIC is present
+in the card outside of Mellanox corporate blogs\footnote{\url{https://nvidianews.nvidia.com/news/mellanox-to-acquire-world-leading-network-intelligence-technology-developer-titan-ic-to-strengthen-leadership-in-security-and-data-analytics}}.
+What we can infer from the above (and after verifying it informally with
+NVIDIA people in SIGMOD'25 in Berlin) is: if the users
+are allowed to submit Regex tasks (pre-DOCA v2.5.0), then they
+interfere with the card's overall routing performance; thus they decided
+to remove any and all DOCA headers that access the accelerator.
+
+\textbf{What this means for this submission}
+Experiments that involve Regex are not included in this reproducibility
+submission. The code used to produce the the experiments will still be part of the
+artifacts in the code repository.
+
+\subsection{TU Berlin is conservative with remote access}
+In order to verify this paper's results, I intend to give access
+to the reviewers to the servers that host BF2 and BF3. Replicating
+the same experiments on other topologies and setups would be hard to do,
+so the next best thing is to verify remotely on our hardware.
+Unfortunately administration is either slow or unwilling to
+procure ad-hoc accounts for the reviewers on the servers hosting the cards,
+since they switched to a strict LDAP-based account management system.
+
+\textbf{What this means for this submission}
+I will provide my own credentials for remote connection to TU Berlin's servers
+to the reviewers while also being fully available during evaluation.
+To do so, this will require co-operation between the reviewers and me. I can be
+reached on the submitted email or on my personal email (firstname.lastname at gmail com)
+in order to provide username, password, and 2-factor authentication codes
+as well as assist in execution. Since I now have a full-time job,
+please contact me ahead of time, so the process is smooth for everyone involved.
+
+\section{Reproducing results}
+We offer a \texttt{reproducibility.py} ``all-in-one'' script under \texttt{scripts}.
+By default, the script will re-run all experiments and also try to re-produce this
+PDF with the updated results.
+
+A full run of everything will take around 3 days, so I suggest to the reviewers
+to split the reproducibility task in two parts. First a meeting to \textit{start}
+the process on our servers together. Then on a separate meeting 3 days 
+later, to verify the results.
+
+\subsection{\texttt{reproducibility.py} Flags}
+The script produces this very same PDF and allows to:
+\begin{itemize}
+    \item run each group of experiments separately
+    \item run only the part that produces an experiment groups figures
+    \item both of the above \textit{(default behavior)}
+\end{itemize}
+
+The separate group of experiments are:
+\begin{itemize}
+    \item \textbf{\texttt{dma}}: Runs the dma experiment and populates data for figures in \cref{subsec:figure-dma}
+    \item \textbf{\texttt{compress}}: Runs (de)compression experiments and populates data for figures in \cref{subsec:figures-compress-decompress} as well as \cref{subsec:figures-doca-task-breakdown}
+    \item \textbf{\texttt{coprocess}}: Runs all co-processing experiments and populates data for figures in \cref{subsec:figures-coprocessing}
+    \item \textbf{\texttt{network}}: Runs all network interference-related experiments and populates data for figures in \cref{subsec:figures-network-interference}
+\end{itemize}
+
+If one or more are selected from the above, the script will execute only those experiments.
+
+The only flag related to the PDF build is:
+\begin{itemize}
+    \item \textbf{\texttt{only\_figs}}: Only builds the PDF with data that are already in place.
+\end{itemize}
+
+PDF build will run no matter what, it's enabled by default.
+For all listed flags, prepend a double hyphen.
+
+\section{Experiments}
+In this section I will cover the individual groups of figures that should be reproduced,
+connect them to the original paper, and explain any differences I noticed
+while reproducing them (recall the issues mentioned in \cref{sec:issues}).
+
+Overall, the figures related to reproducibility are all the figures from
+Figure 6 and onwards in the original paper.
+The reason I don't provide individual per-figure experiments is that a lot of them
+re-use results from the same experiment. Originally I benchmarked a single DOCA task
+and later created individual figures from Python notebooks using the same
+results. I kept the same process for reproducibility.
+
+\textbf{Note:} Figure 8 is included here as an example. Once the script finishes
+a copy of this PDF names \texttt{main.pdf} will render with all figures included.
+
+\subsection{Figure 8 (DMA)}
+\label{subsec:figure-dma}
+This section discusses Figure 6 in the original paper.
+
+\begin{figure}[t]
+  \centering
+  \begin{subfigure}[b]{0.315\columnwidth}
+      \includegraphics[width=\textwidth]{figures/dma-buf-vs-jobs-HostBF2.pdf}
+      \caption{Host to BF2}
+      \label{fig:dma-bf2-tput}
+  \end{subfigure}
+  \hspace{0.01\columnwidth}
+  \begin{subfigure}[b]{0.315\columnwidth}
+      \includegraphics[width=\textwidth]{figures/dma-buf-vs-jobs-HostBF3.pdf}
+      \caption{Host to BF3}
+      \label{fig:dma-bf3-tput}
+  \end{subfigure}
+  \hspace{0.01\columnwidth}
+  \begin{subfigure}[b]{0.315\columnwidth}
+      \includegraphics[width=\textwidth]{figures/dma-buf-vs-jobs-BlueField3.pdf}
+      \caption{BF3 to Host}
+      \label{fig:dma-bf3-host-tput}
+  \end{subfigure}
+  \caption*{Figure 8: DMA performance.}
+  \label{fig:dma-results}
+\end{figure}
+
+The difference between configurations here is expected.
+The main reason for that is that there are many configurations that are close to
+optimal in BF3 (both directions) and results are averaged over multiple runs;
+hence there is inherent noise in all results that can change the overall winner.
+Despite that, the values are close to the ones in the paper. 
+Moreover, BF2 remains similar to the original since it's capped at the same maximum.
+
+\subsection{Figures 7,9,10,11,12 (Compress/Decompress)}
+\label{subsec:figures-compress-decompress}
+This section contains all results with regards to Compression or
+Decompression related figures (both \texttt{deflate} and LZ4).
+
+% \begin{figure}[t]
+%     \centering
+%     \includegraphics[width=\columnwidth]{figures/compression-size-vs-throughput.tex}
+%     \caption*{Figure 7: DPU Compression on DEFLATE.}
+%     \label{fig:compression-size-vs-tput}
+% \end{figure}
+
+% \begin{figure}[t]
+%     \centering
+%     \includegraphics[width=\columnwidth]{figures/compression-all.tex}
+%     \caption*{Figure 9: DPU Compression against other algorithms.}
+%     \label{fig:compression-all-algos}
+% \end{figure}
+
+% \begin{figure}[t]
+%     \centering
+%     \includegraphics[width=\columnwidth]{figures/decompression-deflate-size-vs-throughput.tex}
+%     \caption*{Figure 10: DPU Decompression on DEFLATE.}
+%     \label{fig:decompression-deflate-size-vs-throughput}
+% \end{figure}
+
+% \begin{figure}[t]
+%     \centering
+%     \includegraphics[width=\columnwidth]{figures/decompression-lz4-size-vs-throughput.tex}
+%     \caption*{Figure 11: DPU Decompression on LZ4.}
+%     \label{fig:decompression-lz4-size-vs-throughput}
+% \end{figure}
+
+% \begin{figure}[t]
+%     \centering
+%     \includegraphics[width=\columnwidth]{figures/decompression-all.tex}
+%     \caption*{Figure 12: DPU Decompression against other algorithms.}
+%     \label{fig:decompression-all-algos}
+% \end{figure}
+
+The expected difference here are any and all BF2-related results.
+Since the card is now constrained to use $\leq 2 MiB$ sized buffers instead of $128 MiB$,
+the experiments either stop on that size (and exhibit same behavior for everything else)
+or show lower throughput only for BF2.
+
+\subsection{Figure 6 (DOCA Task Breakdown)}
+\label{subsec:figures-doca-task-breakdown}
+This section contains the results for the overall task breakdown of
+the original Figure 6.
+
+% \begin{figure}[t]
+%     \centering
+%     \begin{subfigure}[b]{0.51\columnwidth}
+%         \includegraphics[width=\columnwidth]{figures/compression-time-breakdown.tex}
+%         \label{fig:compression-time}
+%     \end{subfigure}
+%     \begin{subfigure}[b]{0.43\columnwidth}
+%         \includegraphics[width=\columnwidth]{figures/compression-throughput-breakdown.tex}
+%         \label{fig:compression-throughput}
+%     \end{subfigure}
+%     \caption*{Figure 6: End-to-End lifetime breakdown of a DOCA task.}
+%     \label{fig:compression-breakdown}
+% \end{figure}
+
+Similar to the (de)compression results, we can see lower throughput for BF2
+due to the buffer changes.
+
+\subsection{Figure 14 (Co-Processing)}
+\label{subsec:figures-coprocessing}
+This section covers the row of sub-figures in Figure 14, with the co-processing
+results per taask as well as the CPU savings.
+
+Once again, the changes in BF2 affected the overall results, with BF2-related
+throughput being lower.
+
+\subsection{Figure 15 (Co-Processing Impact)}
+\label{subsec:figures-network-interference}
+This section covers the resulting figures from experiments with regards
+to the impact of concurrently co-processing during data routing.
+
+While there is expected variance in these results since they include
+networked results, they do not involve BF2 in this case.
+
+\section{Datasets}
+While I tried to include the two datasets in the original paper, it
+only makes sense to include the Silesia dataset since Regex experiments
+are omitted.
+
+The Silesia dataset\footnote{\url{https://sun.aei.polsl.pl/~sdeor/index.php?page=silesia}}, which is used for the rest of the experiments, is 
+included as a \texttt{git submodule} in the repository
+and already downloaded in the servers by \texttt{git clone --recursive}.
+
+\section{Topology and Setup}
+We keep the same topology as described in the original paper.
+Specifically, we utilize two types of Host-DPU systems,
+namely an EPYC - BlueField 2 (aliased as \texttt{cloud-48} in our ssh scripts) 
+and an EPYC - BlueField 3 (aliased as \texttt{sr675-1-100} in our ssh scripts).
+Under both x86 servers, the main Bluefield card is aliased as
+\texttt{bf-pcie} in our ssh scripts.
+
+The main server that will make use of is \texttt{sr675-1-100} and any remote results
+will be copied over via ssh to it before rendering the PDF.
+
+The rest of the setup is identical as described in the paper.
+
+% \bibliographystyle{ACM-Reference-Format}
+% \bibliography{sample}
+
+\clearpage
+\end{document}
+\endinput

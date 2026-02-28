@@ -1,8 +1,30 @@
-#!/bin/bash
+#!/usr/bin/env bash
+set -euo pipefail
+# set -x
+
+prefix=""
+count=0
+
+while (( $# )); do
+  case "$1" in
+    --bf2-host) prefix="bf2-host"; ((++count)); shift ;;
+    --bf2-dpu)  prefix="bf2-dpu";  ((++count)); shift ;;
+    --bf3-host) prefix="bf3-host"; ((++count)); shift ;;
+    --bf3-dpu)  prefix="bf3-dpu";  ((++count)); shift ;;
+    --) shift; break ;;
+    --*) echo "Unknown option: $1" >&2; exit 2 ;;
+    *)  break ;;
+  esac
+done
+
+if (( count != 1 )); then
+  echo "Error: you must specify exactly one of --bf2-host, --bf2-dpu, --bf3-host, --bf3-dpu" >&2
+  exit 1
+fi
 
 # create results dir
 mkdir -p build && mkdir -p build/results
-rm -rf build/results/host && mkdir -p build/results/host
+rm -rf build/results/${prefix} && mkdir -p build/results/${prefix}
 
 # Default binary path
 turbobench_path="./bin/TurboBench/turbobench"
@@ -41,18 +63,18 @@ buffer_sizes=(
 )
 
 # Build binary if missing
-if [ ! -f "bin/TurboBench/turbobench" ]; then
-  echo "Building turbobench binary..."
-  cd bin
-  git clone --depth=1 --recursive https://github.com/powturbo/TurboBench.git >/dev/null 2>&1
-  cp TurboBench/makefile TurboBench/makefile.orig
-  cp makefile_turbobench TurboBench/makefile
-  cd TurboBench
-  make clean >/dev/null 2>&1
-  make >/dev/null 2>&1
-  mv makefile.orig makefile
-  cd ../..
-fi
+# if [ ! -f "bin/TurboBench/turbobench" ]; then
+#   echo "Building turbobench binary..."
+#   cd bin
+#   git clone --depth=1 --recursive https://github.com/powturbo/TurboBench.git >/dev/null 2>&1
+#   cp TurboBench/makefile TurboBench/makefile.orig
+#   cp makefile_turbobench TurboBench/makefile
+#   cd TurboBench
+#   make clean >/dev/null 2>&1
+#   make >/dev/null 2>&1
+#   mv makefile.orig makefile
+#   cd ../..
+# fi
 
 echo "Benchmarking zlib from $turbobench_path..."
 # Iterate over each file found within the directory and subdirectories
@@ -67,7 +89,7 @@ find corpora/silesia -type d -name ".git" -prune -o -type f ! -name "README.md" 
     cp $file $filename
     sleep 1
     $turbobench_path -ezlib,1,2,3 -p=7 $filename
-    mv $filename.tbb build/results/host/$parentdir.$filename.orig.dflt.tbb
+    mv $filename.tbb build/results/${prefix}/$parentdir.$filename.orig.dflt.tbb
     rm -rf $filename
     # Test with specific buffer sizes
     for size in "${buffer_sizes[@]}"; do
@@ -78,12 +100,12 @@ find corpora/silesia -type d -name ".git" -prune -o -type f ! -name "README.md" 
         sleep 1
         # Call your binary with the file path as an argument
         $turbobench_path -ezlib,1,2,3  -p=7 $filename
-        mv $filename.tbb build/results/host/$parentdir.$filename.$size.dflt.tbb
+        mv $filename.tbb build/results/${prefix}/$parentdir.$filename.$size.dflt.tbb
         rm -rf $filename
     done
 done
 
-cd build/results/host
+cd build/results/${prefix}
 # Use awk to merge the original file size CSVs results
 awk '(NR == 1) || (FNR > 1)' *orig.dflt.tbb > cpu-orig-dflt.csv
 # Use awk to merge all variable file size CSVs results
@@ -103,7 +125,7 @@ find corpora/silesia -type d -name ".git" -prune -o -type f ! -name "README.md" 
     cp $file $filename
     sleep 1
     $turbobench_path -elz4,1,3,6 -p=7 $filename
-    mv $filename.tbb build/results/host/$parentdir.$filename.orig.lz4.tbb
+    mv $filename.tbb build/results/${prefix}/$parentdir.$filename.orig.lz4.tbb
     rm -rf $filename
     # Test with specific buffer sizes
     for size in "${buffer_sizes[@]}"; do
@@ -114,12 +136,12 @@ find corpora/silesia -type d -name ".git" -prune -o -type f ! -name "README.md" 
         sleep 1
         # Call your binary with the file path as an argument
         $turbobench_path -elz4,1,3,6 -p=7 $filename
-        mv $filename.tbb build/results/host/$parentdir.$filename.$size.lz4.tbb
+        mv $filename.tbb build/results/${prefix}/$parentdir.$filename.$size.lz4.tbb
         rm -rf $filename
     done
 done
 
-cd build/results/host
+cd build/results/${prefix}
 # Use awk to merge the original file size CSVs results
 awk '(NR == 1) || (FNR > 1)' *orig.lz4.tbb > cpu-orig-lz4.csv
 # Use awk to merge all variable file size CSVs results
@@ -139,7 +161,7 @@ find corpora/silesia -type d -name ".git" -prune -o -type f ! -name "README.md" 
     cp $file $filename
     sleep 1
     $turbobench_path -elibdeflate,1,2,3 -p=7 $filename
-    mv $filename.tbb build/results/host/$parentdir.$filename.orig.libdeflate.tbb
+    mv $filename.tbb build/results/${prefix}/$parentdir.$filename.orig.libdeflate.tbb
     rm -rf $filename
     # Test with specific buffer sizes
     for size in "${buffer_sizes[@]}"; do
@@ -150,12 +172,12 @@ find corpora/silesia -type d -name ".git" -prune -o -type f ! -name "README.md" 
         sleep 1
         # Call your binary with the file path as an argument
         $turbobench_path -elibdeflate,1,2,3 -p=7 $filename
-        mv $filename.tbb build/results/host/$parentdir.$filename.$size.libdeflate.tbb
+        mv $filename.tbb build/results/${prefix}/$parentdir.$filename.$size.libdeflate.tbb
         rm -rf $filename
     done
 done
 
-cd build/results/host
+cd build/results/${prefix}
 # Use awk to merge the original file size CSVs results
 awk '(NR == 1) || (FNR > 1)' *orig.libdeflate.tbb > cpu-orig-libdeflate.csv
 # Use awk to merge all variable file size CSVs results

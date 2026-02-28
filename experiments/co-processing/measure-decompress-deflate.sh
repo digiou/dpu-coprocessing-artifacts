@@ -1,15 +1,15 @@
 #!/bin/bash
 
-# Initialize the OLD flag to false
-OLD=false
+# Initialize the arm flag to false
+arm=false
 V2=false
 V3=false
 
 # Parse arguments
 while [[ $# -gt 0 ]]; do
   case "$1" in
-    --old)
-      OLD=true
+    --arm)
+      arm=true
       shift
       ;;
     --v2)
@@ -27,7 +27,7 @@ while [[ $# -gt 0 ]]; do
   esac
 done
 
-if [ "$V2" = true ]; then
+if ! $arm; then
     if [ ! -d "vcpkg" ]; then
         git clone https://github.com/Microsoft/vcpkg.git
         ./vcpkg/bootstrap-vcpkg.sh -disableMetrics
@@ -35,32 +35,13 @@ if [ "$V2" = true ]; then
 
     cmake -B build -S . -DCMAKE_TOOLCHAIN_FILE=vcpkg/scripts/buildsystems/vcpkg.cmake
     cmake --build build
+else
+    rm -rf build
+    cp -r arm-build build
 fi
 
 # create results dir
 rm -rf results/doca ; mkdir -p results ; mkdir -p results/doca
-
-# Function to fill the buffer with repeated content of the original file
-fill_buffer() {
-    local input_file="$1"
-    local buffer_size="$2"
-    
-    # Remove previous temp file
-    rm -rf /dev/shm/input
-
-    # Get the size of the original file
-    local original_size=$(stat -c%s "$input_file")
-    local repeat_count=$((buffer_size / original_size + 1))
-
-    # Create the temporary file by repeating the original file's content
-    truncate -s 0 /dev/shm/input
-    for ((i=0; i<repeat_count; i++)); do
-        cat "$input_file" >> /dev/shm/input
-    done
-
-    # Truncate the file to the exact buffer size
-    truncate -s "$buffer_size" /dev/shm/input
-}
 
 if [ "$V2" = true ] || [ "$V3" = true ]; then
     # Iterate over each file found within the directory and subdirectories
@@ -71,6 +52,9 @@ if [ "$V2" = true ] || [ "$V3" = true ]; then
             continue
         fi
         filesize=$(stat -c '%s' $file)
+        if [ "$V2" = true ]; then
+            filesize=2097152
+        fi
 
         # Loop over percentage pairs
         for (( i=0, j=100; i<=100; i+=10, j-=10 )); do
@@ -104,6 +88,7 @@ if [ "$V2" = true ] || [ "$V3" = true ]; then
             if [ "$V3" = true ]; then
                 ./build/co-processing-decompress-deflate $j $i $SIZE_DPU $version $first_compressed_chunk $chunk_index >> /dev/null
             fi
+            sleep 1
             mv results-cpu-decompress-deflate.json results-$j-$i-$filename-cpu-decompress-deflate.json
             mv results-doca-decompress-deflate.json results-$j-$i-$filename-doca-decompress-deflate.json
             compressed_filesize_cpu=$(stat -c '%s' /dev/shm/infl-input)

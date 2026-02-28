@@ -1,0 +1,62 @@
+\begin{tikzpicture}
+
+    % Manually list the devices that appear in your CSV
+    % A macro that returns a more readable name given a device key
+    \newcommand{\devicelabel}[1]{%
+        \ifthenelse{\equal{#1}{bf2}}{BF2 HW}{%
+        \ifthenelse{\equal{#1}{bf3}}{BF3 HW}{%
+        \ifthenelse{\equal{#1}{bf3-dpu}}{BF3 ARM}{%
+        \ifthenelse{\equal{#1}{bf2-host}}{BF2 Host}{%
+        \ifthenelse{\equal{#1}{bf2-dpu}}{BF2 ARM}{%
+        \ifthenelse{\equal{#1}{bf3-host}}{BF3 Host}{#1}%
+        }}}}}%
+    }
+
+    \begin{axis}[
+        width=\columnwidth,
+        height=1.8cm, % Keep the height as required
+        scale only axis,
+        xlabel=Input Size (bytes),
+        ylabel=Tput (MiB/s),
+        xlabel style={yshift=3pt},   % move X label closer to the axis
+        ymode=log,
+        xmode=log,
+        legend style={
+            legend columns=3,
+            draw=none,
+            fill=none,
+            anchor=north east,
+            at={(0.91,1.475)}
+        },
+        ymajorgrids=true,
+        xmajorgrids=true,
+        style={xshift=0pt,yshift=0pt},
+        no markers
+    ]
+
+    % Read the CSV table into a pgfplots data structure.
+    \pgfplotstableread[col sep=comma]{figures/results/decomp-lz4-size-vs-throughput.csv}\datatable
+
+    % Plot each device/hardware column as a separate line.
+    \addplot table[x=size, y=bf3]{\datatable};
+    \addlegendentry{\devicelabel{bf3}}
+
+    \addplot table[x=size, y=bf2-dpu]{\datatable};
+    \addlegendentry{\devicelabel{bf2-dpu}}
+
+    \addplot table[x=size, y=bf3-dpu]{\datatable};
+    \addlegendentry{\devicelabel{bf3-dpu}}
+
+    \addplot table[x=size, y=bf2-host]{\datatable};
+    \addlegendentry{\devicelabel{bf2-host}}
+
+    \addplot table[x=size, y=bf3-host]{\datatable};
+    \addlegendentry{\devicelabel{bf3-host}}
+
+    % Now add a line for the ASIC performance ceiling:
+    \addplot table[x=size, y=bf3-asic]{\datatable};
+    \addlegendentry{BF3 ASIC}
+
+    \end{axis}
+\end{tikzpicture}
+    

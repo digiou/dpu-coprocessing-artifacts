@@ -2,8 +2,10 @@
 #include <iostream>
 #include <fstream>
 #include <string>
+#include <sys/syscall.h>
 #include <thread>
 #include <vector>
+#include <unistd.h>
 
 #include <doca_buf_inventory.h>
 #include <doca_compress.h>
@@ -21,6 +23,23 @@
 
 #include <nlohmann/json.hpp>
 
+void pin_and_expose(const char* name, int core) {
+    cpu_set_t mask;
+    CPU_ZERO(&mask);
+    CPU_SET(core, &mask);
+    pthread_setaffinity_np(pthread_self(), sizeof(mask), &mask);
+
+    pid_t tid = syscall(SYS_gettid);
+    printf("%s TID=%d (core %d)\n", name, tid, core);
+    fflush(stdout);
+}
+
+double thread_cpu_seconds() {
+    timespec ts;
+    clock_gettime(CLOCK_THREAD_CPUTIME_ID, &ts);
+    return ts.tv_sec + ts.tv_nsec * 1e-9;
+}
+
 std::string calculateSeconds(const std::chrono::steady_clock::time_point end,
 							 const std::chrono::steady_clock::time_point start) {
 	auto elapsed = end - start;
@@ -36,7 +55,8 @@ void docaWriteJson(const std::vector<std::string> times, const std::string filen
 	nlohmann::json j;
 	std::vector<std::string> keys = {"overall_submission_elapsed", "task_submission_elapsed",
 									 "busy_wait_elapsed", "cb_elapsed", "cb_end_elapsed", 
-									 "ctx_stop_elapsed", "joined_submission_elapsed"};
+									 "ctx_stop_elapsed", "cpu_time_elapsed", 
+									 "joined_submission_elapsed"};
 	for (uint16_t idx = 0; idx < times.size(); ++idx) {
 		j[keys[idx]] = times[idx];
 	}
@@ -53,7 +73,8 @@ void docaWriteJson(const std::vector<std::string> times, const std::string filen
 
 void cpuWriteJson(const std::vector<std::string> times, const std::string filename) {
 	nlohmann::json j;
-	std::vector<std::string> keys = {"overall_submission_elapsed", "joined_submission_elapsed"};
+	std::vector<std::string> keys = {"overall_submission_elapsed", "cpu_time_elapsed",
+									 "joined_submission_elapsed"};
 	for (uint16_t idx = 0; idx < times.size(); ++idx) {
 		j[keys[idx]] = times[idx];
 	}
@@ -70,6 +91,8 @@ void cpuWriteJson(const std::vector<std::string> times, const std::string filena
 
 void doca_decompress_lz4_worker(SimpleBarrier& start_barrier, SimpleBarrier& end_barrier, 
 			uint64_t asked_buffer_size, uint64_t asked_num_buffers, size_t original_filesize) {
+	// pin thread to specific core
+	pin_and_expose("DPU", 4);  // pick any isolated core
 
 	// DOCA init
 	auto consumer_decompress_lz4 = DecompressLz4Consumer(DecompressLz4Consumer::DEVICE_TYPE::BF3, asked_buffer_size, asked_num_buffers, original_filesize, true);
@@ -103,9 +126,13 @@ void doca_decompress_lz4_worker(SimpleBarrier& start_barrier, SimpleBarrier& end
 	result_times.emplace_back(calculateSeconds(processing_end, processing_start));
 	auto name = "results-" + consumer_decompress_lz4.getName() + ".json";
 	docaWriteJson(result_times, name);
+	printf("[DOCA] user+sys = %s s\n", result_times[6].c_str());
 }
 
 void cpu_lz4_decompress_worker(SimpleBarrier& start_barrier, SimpleBarrier& end_barrier) {
+	// pin thread to specific core
+	pin_and_expose("CPU", 3);  // pick any isolated core
+	
 	// CPU init
 	LZ4Pipe lz4_pipe;
 	auto ret = lz4_pipe.compress_init("/dev/shm/lz4", "/dev/shm/lz4-input");
@@ -128,6 +155,9 @@ void cpu_lz4_decompress_worker(SimpleBarrier& start_barrier, SimpleBarrier& end_
 	// wait for sync
 	start_barrier.arrive_and_wait();
 
+	// log cpu-time start
+	double cpu_time_start = thread_cpu_seconds();
+
 	// entered processing
 	auto processing_start = std::chrono::steady_clock::now();
 
@@ -139,6 +169,9 @@ void cpu_lz4_decompress_worker(SimpleBarrier& start_barrier, SimpleBarrier& end_
 
 	// cpu finished its task
 	auto cpu_task_end = std::chrono::steady_clock::now();
+
+	// log cpu-time end
+	double cpu_time_end = thread_cpu_seconds();
 
 	// log processing state
 	std::cout << "CPU LZ4 end processing!" << std::endl;
@@ -154,8 +187,15 @@ void cpu_lz4_decompress_worker(SimpleBarrier& start_barrier, SimpleBarrier& end_
 
 	lz4_pipe.decompress_cleanup();
 
-	std::vector<std::string> results{calculateSeconds(cpu_task_end, processing_start), calculateSeconds(processing_end, processing_start)};
+	auto cpu_time_elapsed = cpu_time_end - cpu_time_start;
+    std::ostringstream oss;
+    oss << std::fixed << std::setprecision(8) << cpu_time_elapsed;
+    std::string thread_time_elapsed = oss.str();
+
+	std::vector<std::string> results{calculateSeconds(cpu_task_end, processing_start), 
+					thread_time_elapsed, calculateSeconds(processing_end, processing_start)};
 	cpuWriteJson(results, "results-cpu-decompress-lz4.json");
+	printf("[CPU] user+sys = %s s\n", thread_time_elapsed.c_str());
 }
 
 int main(int argc, char **argv) {
@@ -168,7 +208,7 @@ int main(int argc, char **argv) {
 	// Convert arguments to integers
     int percentage_cpu = std::stoi(argv[1]);
     int percentage_dpu = std::stoi(argv[2]);
-	int original_filesize = std::stoi(argv[3]);
+	size_t original_filesize = static_cast<size_t>(std::stoull(argv[3]));
 	int bf_version = std::stoi(argv[4]);
 	uint64_t asked_buffer_size = std::stoi(argv[5]);
 	uint64_t asked_num_buffers = std::stoi(argv[6]);

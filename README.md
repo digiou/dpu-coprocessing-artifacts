@@ -1,9 +1,10 @@
 # dpu-coprocessing-artifacts
 Artifacts for our **Analyzing Near-Network Hardware Acceleration with Co-Processing on DPUs** paper.
 
-The repository contains one sub-directory:
+The repository contains two sub-directories:
 
 - `experiments`: multiple sub-experiments and related common files with their own READMEs
+- `scripts`: orchestrating the sub-experiments for reproducibility, creates a PDF with updated figures
 
 ## Experiment Descriptions
 - `capability-check`: DOCA implementation of a simple check for hardware offloading of tasks related to paper, helper

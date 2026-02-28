@@ -1,0 +1,60 @@
+% https://tex.stackexchange.com/questions/364076/pgfplots-creating-bar-chart-from-csv
+\begin{tikzpicture}
+
+    \newcommand{\algolabel}[1]{%
+        \ifthenelse{\equal{#1}{dflt}}{DEFLATE}{%
+        \ifthenelse{\equal{#1}{libdeflate-3}}{libdeflate-3}{%
+        \ifthenelse{\equal{#1}{libdeflate-6}}{libdeflate-6}{%
+        \ifthenelse{\equal{#1}{lz4-1}}{LZ4-1}{%
+        \ifthenelse{\equal{#1}{lz4-3}}{LZ4-3}{%
+        \ifthenelse{\equal{#1}{lz4-6}}{LZ4-6}{#1}%
+        }}}}}%
+    }
+
+    \begin{axis}[
+        width=\columnwidth,
+        height=1.8cm, % Keep the height as required
+        scale only axis,
+        ybar=0pt,
+        ylabel={Tput (MiB/s)},
+        symbolic x coords={dflt,libdeflate-1,libdeflate-3,lz4-1,lz4-3},
+        xtick=data,
+        xticklabel={\algolabel{\tick}},
+        xtick pos=bottom,
+        % enlarge x limits=0.075,
+        bar width=4.1pt,
+        ymin=0,
+        legend style={
+            legend columns=-1,
+            draw=none,
+            fill=none,
+            anchor=north east,
+            at={(1.01,1.275)}
+        },
+        ymajorgrids=true,
+        xlabel={Compression Algorithm (with compression level)},
+        xlabel style={yshift=3pt},   % move X label closer to the axis
+    ]
+    
+    % Manually list the devices that appear in your CSV
+    % A macro that returns a more readable name given a device key
+    \newcommand{\devicelabel}[1]{%
+    \ifthenelse{\equal{#1}{bf2}}{BF2 HW}{%
+    \ifthenelse{\equal{#1}{bf3-dpu}}{BF3 ARM}{%
+    \ifthenelse{\equal{#1}{bf2-host}}{BF2 Host}{%
+    \ifthenelse{\equal{#1}{bf2-dpu}}{BF2 ARM}{%
+    \ifthenelse{\equal{#1}{bf3-host}}{BF3 Host}{#1}%
+    }}}}%
+    }
+    \pgfplotsinvokeforeach{bf2,bf2-dpu,bf3-dpu,bf2-host,bf3-host}{
+        \addplot table[
+            x=algo,
+            y=#1,
+            col sep=comma
+        ] {figures/results/comp-algos-avg.csv};
+        \addlegendentry{\devicelabel{#1}}
+    }
+    
+\end{axis}
+\end{tikzpicture}
+    

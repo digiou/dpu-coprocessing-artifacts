@@ -1,0 +1,53 @@
+\begin{tikzpicture}
+    \begin{axis}[
+        xbar=0.4pt,
+        scale only axis,
+        width=\columnwidth, 
+        height=2.8cm,
+        xmin=0,
+        xmax=4.2,
+        bar width=0.26cm,
+        enlarge y limits=0.45,
+        xlabel={Observed Throughput (GiB/s)},
+        xlabel style={yshift=3pt},   % move X label closer to the axis
+        symbolic y coords={Caller\\Thread,ASIC},
+        y tick label style={align=center},
+        ytick=data,
+        xmajorgrids=true,
+        nodes near coords,
+        style={xshift=0pt,yshift=0pt},
+        legend style={
+            legend columns=-1,
+            draw=none,
+            fill=none,
+            anchor=north east,
+            at={(0.77,1.175)}
+        },
+    ]
+
+    \pgfplotstableread[col sep=comma]{figures/results/avg_tput_breakdown.csv}\avgtable
+
+    % Plot for BF2+BF3
+    \pgfplotstablegetelem{0}{e2e_mbps}\of\avgtable \let\bftwocallthread\pgfplotsretval
+    \pgfplotstablegetelem{1}{e2e_mbps}\of\avgtable \let\bfthreecallthread\pgfplotsretval
+    \pgfplotstablegetelem{0}{cb_mbps}\of\avgtable \let\bftwoasic\pgfplotsretval
+    \pgfplotstablegetelem{1}{cb_mbps}\of\avgtable \let\bfthreeasic\pgfplotsretval
+
+    % Plot for BF2 Compress
+    \addplot+
+    coordinates {
+        (\bftwocallthread,Caller\\Thread)
+        (\bftwoasic,ASIC)
+    };
+    \addlegendentry{BF2}
+
+    % Plot for BF3 Decompress
+    \addplot+
+    coordinates {
+        (\bfthreecallthread,Caller\\Thread)
+        (\bfthreeasic,ASIC)
+    };
+    \addlegendentry{BF3}
+
+    \end{axis}
+\end{tikzpicture}

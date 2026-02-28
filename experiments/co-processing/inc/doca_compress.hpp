@@ -115,6 +115,7 @@ class CompressConsumer {
         // time counters
         std::chrono::steady_clock::time_point submit_start, submit_end, busy_wait_end, 
                                               ctx_stop_start, ctx_stop_end;
+        double thread_time_start, thread_time_end;
 
         // logic from open_doca_device_with_capabilities
         doca_error_t openDocaDevice();

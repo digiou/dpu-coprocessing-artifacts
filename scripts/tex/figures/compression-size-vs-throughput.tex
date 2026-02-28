@@ -1,0 +1,61 @@
+\begin{tikzpicture}
+
+    % Manually list the devices that appear in your CSV
+    % A macro that returns a more readable name given a device key
+    \newcommand{\devicelabel}[1]{%
+        \ifthenelse{\equal{#1}{bf2}}{BF2 HW}{%
+        \ifthenelse{\equal{#1}{bf3-dpu}}{BF3 ARM}{%
+        \ifthenelse{\equal{#1}{bf2-host}}{BF2 Host}{%
+        \ifthenelse{\equal{#1}{bf2-dpu}}{BF2 ARM}{%
+        \ifthenelse{\equal{#1}{bf3-host}}{BF3 Host}{#1}%
+        }}}}%
+    }
+
+    \begin{axis}[
+        width=\columnwidth,
+        height=1.8cm, % Keep the height as required
+        scale only axis,
+        xlabel=Input Size (bytes),
+        ylabel=Tput (MiB/s),
+        xlabel style={yshift=3pt},   % move X label closer to the axis
+        ymode=log,
+        ymax=10000,
+        xmode=log,
+        legend style={
+            legend columns=3,
+            draw=none,
+            fill=none,
+            anchor=north east,
+            at={(0.91,1.475)}
+        },
+        ymajorgrids=true,
+        xmajorgrids=true,
+        style={xshift=0pt,yshift=0pt},
+    ]
+
+    % Read the CSV table into a pgfplots data structure.
+    \pgfplotstableread[col sep=comma]{figures/results/comp-dflt-size-vs-throughput.csv}\datatable
+
+    % Plot each device/hardware column as a separate line.
+    \addplot table[x=size, y=bf2]{\datatable};
+    \addlegendentry{\devicelabel{bf2}}
+
+    \addplot table[x=size, y=bf2-dpu]{\datatable};
+    \addlegendentry{\devicelabel{bf2-dpu}}
+
+    \addplot[dashed, mark=*, mark options={solid}, color=tol_olive] table[x=size, y=bf3-dpu]{\datatable};
+    \addlegendentry{\devicelabel{bf3-dpu}}
+
+    \addplot[dotted, mark=asterisk, mark options={solid}, color=black] table[x=size, y=bf2-host]{\datatable};
+    \addlegendentry{\devicelabel{bf2-host}}
+
+    \addplot[dotted, mark=diamond*, mark options={solid}, color=blue] table[x=size, y=bf3-host]{\datatable};
+    \addlegendentry{\devicelabel{bf3-host}}
+
+    % Now add a line for the ASIC performance ceiling:
+    \addplot table[x=size, y=bf2-asic]{\datatable};
+    \addlegendentry{BF2 ASIC}
+
+    \end{axis}
+\end{tikzpicture}
+    

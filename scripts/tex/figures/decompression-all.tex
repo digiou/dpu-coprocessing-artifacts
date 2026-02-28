@@ -1,0 +1,61 @@
+% https://tex.stackexchange.com/questions/364076/pgfplots-creating-bar-chart-from-csv
+
+\newcommand{\algolabel}[1]{%
+  \ifthenelse{\equal{#1}{dflt}}{DEFLATE}{%
+  \ifthenelse{\equal{#1}{libdeflate}}{libdeflate}{%
+  \ifthenelse{\equal{#1}{lz4}}{LZ4}{#1}%
+}}%
+}
+
+\begin{tikzpicture}
+    \begin{axis}[
+        width=\columnwidth,
+        height=1.6cm, % Keep the height as required
+        scale only axis,
+        ybar=0pt,
+        ylabel={Tput (MiB/s)},
+        symbolic x coords={dflt,libdeflate,lz4},
+        xtick=data,
+        xticklabel={\algolabel{\tick}},
+        xtick pos=bottom,
+        enlarge x limits=.35,
+        bar width=4.1pt,
+        ymode=log,
+        ymin=1,
+        legend style={
+            legend columns=4,
+            draw=none,
+            fill=none,
+            anchor=north east,
+            at={(0.91,1.495)}
+        },
+        ymajorgrids=true,
+        xlabel={Decompression Algorithm},
+        xlabel style={yshift=3pt},   % move X label closer to the axis
+    ]
+    
+    % Manually list the devices that appear in your CSV
+    % A macro that returns a more readable name given a device key
+    \newcommand{\devicelabel}[1]{%
+    \ifthenelse{\equal{#1}{bf2}}{BF2 HW}{%
+    \ifthenelse{\equal{#1}{bf3}}{BF3 HW}{%
+    \ifthenelse{\equal{#1}{bf2-asic}}{BF2 ASIC}{%
+    \ifthenelse{\equal{#1}{bf3-asic}}{BF3 ASIC}{%
+    \ifthenelse{\equal{#1}{bf3-dpu}}{BF3 ARM}{%
+    \ifthenelse{\equal{#1}{bf2-host}}{BF2 Host}{%
+    \ifthenelse{\equal{#1}{bf2-dpu}}{BF2 ARM}{%
+    \ifthenelse{\equal{#1}{bf3-host}}{BF3 Host}{#1}%
+    }}}}}}}%
+    }
+    \pgfplotsinvokeforeach{bf2,bf2-dpu,bf3-dpu,bf2-host,bf3-host,bf3,bf2-asic,bf3-asic}{
+        \addplot table[
+            x=algo,
+            y=#1,
+            col sep=comma
+        ] {figures/results/decomp-algos-avg.csv};
+        \addlegendentry{\devicelabel{#1}}
+    }
+    
+\end{axis}
+\end{tikzpicture}
+    
