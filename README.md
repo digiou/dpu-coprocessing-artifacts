@@ -12,6 +12,7 @@ The repository contains two sub-directories:
 - `local-compress`: CPU and DOCA implementation of DEFLATE, INFLATE, and LZ4 tasks
 - `regex`: CPU and DOCA implementation of Regex tasks, additionally with `re2`
 - `sbc-bench`: results from running [sbc-bench](https://github.com/ThomasKaiser/sbc-bench) on the ARM CPUs, helper
+- `switching-interference`: distributed experiments that measure the overhead of concurrent data transfer and co-processing
 
 ## Dependencies
 - NVIDIA DOCA v2.9.0 from [here](https://docs.nvidia.com/doca/archive/2-9-0/index.html)
