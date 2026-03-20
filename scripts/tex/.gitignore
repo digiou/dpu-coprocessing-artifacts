@@ -44,5 +44,6 @@
 *blx.bib
 .bak 
 .mtc
+*.xmpi
 build/
 main.pdf

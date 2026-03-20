@@ -1,0 +1,38 @@
+\begin{tikzpicture}
+    \begin{axis}[
+        xbar=0.4pt,
+        scale only axis,
+        width=\linewidth, 
+        height=2.4cm,
+        xmin=0,
+        xmax=119.8,
+        bar width=0.26cm,
+        enlarge y limits=0.45,
+        xlabel={Time Savings (\%)},
+        symbolic y coords={Compr,Dec-Defl,Dec-LZ4},
+        y tick label style={align=center},
+        ytick=data,
+        xlabel style={yshift=3pt},   % move X label closer to the axis
+        xmajorgrids=true,
+        nodes near coords,
+        style={xshift=0pt,yshift=0pt},
+        legend style={
+            legend columns=-1,
+            draw=none,
+            fill=none,
+            anchor=north east,
+            at={(0.77,1.175)}
+        },
+    ]
+
+    % ---- read the CSV ----
+    \pgfplotstableread[col sep=comma]{figures/results/cpu-reduction.csv}\datatable
+
+    \addplot+ table[x=bf2, y=category]{\datatable};
+    \addlegendentry{BF2}
+
+    \addplot+ table[x=bf3, y=category]{\datatable};
+    \addlegendentry{BF3}
+
+    \end{axis}
+\end{tikzpicture}

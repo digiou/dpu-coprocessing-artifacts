@@ -22,7 +22,7 @@ DOCA_CORE_MASK="4"                  # core for doca_bench
 DOCA_CORE_TASK_MASK="5"             # core for the task in doca_bench
 
 TARGET_SIZE=$((5 * 1024 * 1024 * 1024))  # 5gb
-HOST_SOURCE_LOCATION="/local-data/dimitrios/dpu-paper/experiments"
+HOST_SOURCE_LOCATION="/local-data-raid1/dimitrios/dpu-coprocessing-artifacts/experiments"
 HOST_PREPARER_LOCATION="prepare-host.sh"
 HOST_EXECUTOR_LOCATION="execute-host.sh"
 

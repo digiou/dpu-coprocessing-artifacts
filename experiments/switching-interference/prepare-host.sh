@@ -43,7 +43,7 @@ echo $first_compressed_chunk > /dev/shm/first_compressed_chunk.info
 echo $first_compressed_chunk_lz4 > /dev/shm/first_compressed_chunk_lz4.info
 
 # prepare binaries, copied from `co-processing/measure-decompress-lz4.sh`
-cd /local-data/dimitrios/dpu-paper/experiments/co-processing
+cd /local-data-raid1/dimitrios/dpu-coprocessing-artifacts/experiments/co-processing
 if [ ! -d "vcpkg" ]; then
     git clone https://github.com/Microsoft/vcpkg.git
     ./vcpkg/bootstrap-vcpkg.sh -disableMetrics

@@ -57,12 +57,18 @@
 \newcommand\vldbauthors{\authors}
 \newcommand\vldbtitle{\shorttitle} 
 % leave empty if no availability url should be set
-\newcommand\vldbavailabilityurl{URL_TO_YOUR_ARTIFACTS}
+\newcommand\vldbavailabilityurl{https://github.com/digiou/dpu-coprocessing-artifacts}
 % whether page numbers should be shown or not, use 'plain' for review versions, 'empty' for camera ready
 \newcommand\vldbpagestyle{plain} 
 
 \begin{document}
-\title{Reproducibility Results for ``Analyzing Near-Network Hardware Acceleration with Co-Processing on DPUs''}
+\title{Reproducibility Report for Vol. 18, Paper ID 2564 ``Analyzing Near-Network Hardware Acceleration with Co-Processing on DPUs''}
+
+\author{Dimitrios Giouroukis}
+\affiliation{%
+  \institution{BIFOLD, TU Berlin}
+}
+\email{dimitrios.giouroukis@tu-berlin.de}
 
 \maketitle
 
@@ -247,40 +253,40 @@ Moreover, BF2 remains similar to the original since it's capped at the same maxi
 This section contains all results with regards to Compression or
 Decompression related figures (both \texttt{deflate} and LZ4).
 
-% \begin{figure}[t]
-%     \centering
-%     \includegraphics[width=\columnwidth]{figures/compression-size-vs-throughput.tex}
-%     \caption*{Figure 7: DPU Compression on DEFLATE.}
-%     \label{fig:compression-size-vs-tput}
-% \end{figure}
+\begin{figure}[t]
+    \centering
+    \includegraphics[width=\columnwidth]{figures/compression-size-vs-throughput.tex}
+    \caption*{Figure 7: DPU Compression on DEFLATE.}
+    \label{fig:compression-size-vs-tput}
+\end{figure}
 
-% \begin{figure}[t]
-%     \centering
-%     \includegraphics[width=\columnwidth]{figures/compression-all.tex}
-%     \caption*{Figure 9: DPU Compression against other algorithms.}
-%     \label{fig:compression-all-algos}
-% \end{figure}
+\begin{figure}[t]
+    \centering
+    \includegraphics[width=\columnwidth]{figures/compression-all.tex}
+    \caption*{Figure 9: DPU Compression against other algorithms.}
+    \label{fig:compression-all-algos}
+\end{figure}
 
-% \begin{figure}[t]
-%     \centering
-%     \includegraphics[width=\columnwidth]{figures/decompression-deflate-size-vs-throughput.tex}
-%     \caption*{Figure 10: DPU Decompression on DEFLATE.}
-%     \label{fig:decompression-deflate-size-vs-throughput}
-% \end{figure}
+\begin{figure}[t]
+    \centering
+    \includegraphics[width=\columnwidth]{figures/decompression-deflate-size-vs-throughput.tex}
+    \caption*{Figure 10: DPU Decompression on DEFLATE.}
+    \label{fig:decompression-deflate-size-vs-throughput}
+\end{figure}
 
-% \begin{figure}[t]
-%     \centering
-%     \includegraphics[width=\columnwidth]{figures/decompression-lz4-size-vs-throughput.tex}
-%     \caption*{Figure 11: DPU Decompression on LZ4.}
-%     \label{fig:decompression-lz4-size-vs-throughput}
-% \end{figure}
+\begin{figure}[t]
+    \centering
+    \includegraphics[width=\columnwidth]{figures/decompression-lz4-size-vs-throughput.tex}
+    \caption*{Figure 11: DPU Decompression on LZ4.}
+    \label{fig:decompression-lz4-size-vs-throughput}
+\end{figure}
 
-% \begin{figure}[t]
-%     \centering
-%     \includegraphics[width=\columnwidth]{figures/decompression-all.tex}
-%     \caption*{Figure 12: DPU Decompression against other algorithms.}
-%     \label{fig:decompression-all-algos}
-% \end{figure}
+\begin{figure}[t]
+    \centering
+    \includegraphics[width=\columnwidth]{figures/decompression-all.tex}
+    \caption*{Figure 12: DPU Decompression against other algorithms.}
+    \label{fig:decompression-all-algos}
+\end{figure}
 
 The expected difference here are any and all BF2-related results.
 Since the card is now constrained to use $\leq 2 MiB$ sized buffers instead of $128 MiB$,
@@ -292,19 +298,19 @@ or show lower throughput only for BF2.
 This section contains the results for the overall task breakdown of
 the original Figure 6.
 
-% \begin{figure}[t]
-%     \centering
-%     \begin{subfigure}[b]{0.51\columnwidth}
-%         \includegraphics[width=\columnwidth]{figures/compression-time-breakdown.tex}
-%         \label{fig:compression-time}
-%     \end{subfigure}
-%     \begin{subfigure}[b]{0.43\columnwidth}
-%         \includegraphics[width=\columnwidth]{figures/compression-throughput-breakdown.tex}
-%         \label{fig:compression-throughput}
-%     \end{subfigure}
-%     \caption*{Figure 6: End-to-End lifetime breakdown of a DOCA task.}
-%     \label{fig:compression-breakdown}
-% \end{figure}
+\begin{figure}[t]
+    \centering
+    \begin{subfigure}[b]{0.51\columnwidth}
+        \includegraphics[width=\columnwidth]{figures/compression-time-breakdown.tex}
+        \label{fig:compression-time}
+    \end{subfigure}
+    \begin{subfigure}[b]{0.43\columnwidth}
+        \includegraphics[width=\columnwidth]{figures/compression-throughput-breakdown.tex}
+        \label{fig:compression-throughput}
+    \end{subfigure}
+    \caption*{Figure 6: End-to-End lifetime breakdown of a DOCA task.}
+    \label{fig:compression-breakdown}
+\end{figure}
 
 Similar to the (de)compression results, we can see lower throughput for BF2
 due to the buffer changes.
@@ -322,8 +328,58 @@ throughput being lower.
 This section covers the resulting figures from experiments with regards
 to the impact of concurrently co-processing during data routing.
 
+\begin{figure*}[t]
+    \centering
+    \ref{coprocessing-legend}
+
+    \begin{subfigure}[b]{0.242\textwidth}
+        \includegraphics[width=\textwidth]{figures/coprocessing-compress.tex}
+        \caption{Compress (BF2)}
+        \label{subfig:coprocessing-compress}
+    \end{subfigure}
+    \hspace{0.002\textwidth}
+    \begin{subfigure}[b]{0.242\textwidth}
+        \includegraphics[width=\textwidth]{figures/coprocessing-decompress-deflate.tex}
+        \caption{Decompress (BF2, BF3)}
+        \label{subfig:coprocessing-decompress-deflate}
+    \end{subfigure}
+    \hspace{0.002\textwidth}
+    \begin{subfigure}[b]{0.242\textwidth}
+        \includegraphics[width=\textwidth]{figures/coprocessing-decompress-lz4-bf3.tex}
+        \caption{LZ4 Decomp. (BF3)}
+        \label{subfig:coprocessing-lz4}
+    \end{subfigure}
+    \hspace{0.002\textwidth}
+    \begin{subfigure}[b]{0.242\textwidth}
+        \includegraphics[width=\columnwidth]{figures/cpu-reduction.tex}
+        \caption{Host CPU Savings}
+        \label{subfig:cpu-reduction}
+    \end{subfigure}
+    \caption{Co-processing results per task on BF2 and BF3 for Static and Reconfiguration scenarios from Host and ARM.}
+    \label{fig:coprocessing}
+\end{figure*}
+
 While there is expected variance in these results since they include
 networked results, they do not involve BF2 in this case.
+
+\begin{figure}[t]
+    \centering
+    \ref{routing-impact-legend}
+
+    \begin{subfigure}[b]{0.435\columnwidth}
+        \includegraphics[width=\columnwidth]{figures/iperf-impact-tput.tex}
+        \caption{Throughput}
+        \label{fig:iperf-tput}
+    \end{subfigure}
+    \hspace{0.0115\columnwidth}
+    \begin{subfigure}[b]{0.44\columnwidth}
+        \includegraphics[width=\columnwidth]{figures/iperf-impact-latency.tex}
+        \caption{Latency}
+        \label{fig:iperf-latency}
+    \end{subfigure}
+    \caption{Co-processing impact during data routing.}
+    \label{fig:iperf-results}
+\end{figure}
 
 \section{Datasets}
 While I tried to include the two datasets in the original paper, it

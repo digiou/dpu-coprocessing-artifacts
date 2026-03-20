@@ -1,0 +1,45 @@
+\begin{tikzpicture}
+    \begin{axis}[
+        width=\linewidth,
+        height=3cm, % Keep the height as required
+        ymode=log,
+        ymin=10,
+        xlabel={Offload Percentage (\%)},
+        ylabel={Tput (MiB/s)},
+        xlabel style={yshift=3pt},   % move X label closer to the axis
+        ymajorgrids=true,
+        xmajorgrids=true,
+    ]
+  
+      % Load table from an external CSV file.
+      % Make sure the CSV file has a header row matching the column names below.
+      \pgfplotstableread[col sep=comma]{figures/results/coprocessing-decompress-lz4-host.csv}\csvdata
+      \pgfplotstableread[col sep=comma]{figures/results/coprocessing-decompress-lz4-arm.csv}\csvdataarm
+  
+      % Plot: Static
+      \addplot[
+        color=blue,
+        mark=square*,
+        line width=1pt,
+        mark size=1.5pt
+      ] table[x=sharing_percentage, y=static]{\csvdata};
+      % \addlegendentry{Static}
+  
+      % Plot: Reconfiguration
+      \addplot[
+        color=red,
+        mark=triangle*,
+        line width=1pt,
+        mark size=1.5pt
+      ] table[x=sharing_percentage, y=reconfiguration]{\csvdata};
+      % \addlegendentry{Reconfiguration}
+
+      % Plot: Static ARM
+      \addplot[
+        color=tol_teal,
+        mark=x,
+        line width=1pt
+      ] table[x=sharing_percentage, y=static]{\csvdataarm};
+  
+    \end{axis}
+\end{tikzpicture}

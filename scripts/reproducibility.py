@@ -9,6 +9,7 @@ import re
 import shutil
 import subprocess
 
+from datetime import datetime
 from pathlib import Path
 
 import pandas as pd
@@ -16,15 +17,13 @@ import numpy as np
 import seaborn as sns
 import matplotlib.pyplot as plt
 
-
-def run_dma() -> None:
-    logger.info("Need SUDO for PCIe IPs on DPUs (tmfifo_net1 on BF3, tmfifo_net0 on BF2)")
+def setup_host() -> None:
+    logger.info("Need SUDO for PCIe IPs on DPUs (tmfifo_net{0/1} on BF3, tmfifo_net0 on BF2)")
     try:
         subprocess.run(
             ["sudo", "ifconfig", "tmfifo_net1", "192.168.100.1/24"],
             check=True
         )
-        logger.info("✔ tmfifo_net1 set up")
     except subprocess.CalledProcessError as e: # sudo or ifconfig returned non-zero
         logger.warning(f"Failed to assign BF2 IP (wrong password or command error: {e.returncode}).")
         return
@@ -36,10 +35,24 @@ def run_dma() -> None:
             ["ssh", "-tt", "cloud-48", "sudo", "ifconfig", "tmfifo_net0", "192.168.100.1/24"],
             check=True
         )
-        logger.info("✔ tmfifo_net0 set up")
+        logger.info("✔ BF2 set up")
     except subprocess.CalledProcessError as e:
         logger.warning(f"Failed to assign BF2 IP (wrong password or command error: {e.returncode}).")
         return
+    logger.info("Prepping BF3 for dual-DPU switching between DPU0 and DPU1...")
+    os.chdir("../experiments/switching-interference")
+    try:
+        subprocess.run(
+            ["bash", "00_prepare_dpus.sh"],
+            stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, check=True
+        )
+        logger.info("✔ host preparation completed")
+    except FileNotFoundError:
+        logger.warning("00_prepare_dpus.sh not found in PATH")
+        return
+    os.chdir("../../scripts")
+
+def run_dma() -> None:
     logger.info("Running dma experiments for host-BF3, BF3-host, and host-BF2...")
     os.chdir("../experiments/dma")  # run local experiment from Host to BF3
     try:
@@ -311,7 +324,7 @@ def run_compress() -> None:
         return
     try:  # bf2-host (CPU)
         subprocess.run( # TODO: adjust script dir to artifacts
-            ["ssh", "cloud-48", "cd dpu-paper/experiments/local-compress && bash measure-cpu.sh --bf2-host"],
+            ["ssh", "cloud-48", "cd dpu-coprocessing-artifacts/experiments/local-compress && bash measure-cpu.sh --bf2-host"],
             stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, check=True
         )
         logger.info("✔ bf2-host CPU completed")
@@ -320,7 +333,7 @@ def run_compress() -> None:
         return
     try:  # bf3-dpu (CPU)
         subprocess.run( # TODO: adjust script dir to artifacts
-            ["ssh", "bf-pcie", "cd dpu-paper/experiments/local-compress && bash measure-cpu.sh --bf3-dpu"],
+            ["ssh", "bf-pcie", "cd dpu-coprocessing-artifacts/experiments/local-compress && bash measure-cpu.sh --bf3-dpu"],
             stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, check=True
         )
         logger.info("✔ bf3-dpu CPU completed")
@@ -329,7 +342,7 @@ def run_compress() -> None:
         return
     try:  # bf2-dpu (CPU)
         subprocess.run( # TODO: adjust script dir to artifacts
-            ["ssh", "cloud-48", "ssh bf-pcie 'cd dpu-paper/experiments/local-compress && bash measure-cpu.sh --bf2-dpu'"],
+            ["ssh", "cloud-48", "ssh bf-pcie 'cd dpu-coprocessing-artifacts/experiments/local-compress && bash measure-cpu.sh --bf2-dpu'"],
             stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, check=True
         )
         logger.info("✔ bf2-dpu CPU completed")
@@ -338,7 +351,7 @@ def run_compress() -> None:
         return
     try:  # bf3 (DOCA)
         subprocess.run( # TODO: adjust script dir to artifacts
-            ["ssh", "bf-pcie", "cd dpu-paper/experiments/local-compress && bash measure-dpu.sh --v3"],
+            ["ssh", "bf-pcie", "cd dpu-coprocessing-artifacts/experiments/local-compress && bash measure-dpu.sh --v3"],
             stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, check=True
         )
         logger.info("✔ bf3 (DOCA) completed")
@@ -347,7 +360,7 @@ def run_compress() -> None:
         return
     try:  # bf2 (DOCA)
         subprocess.run( # TODO: adjust script dir to artifacts
-            ["ssh", "cloud-48", "ssh bf-pcie 'cd dpu-paper/experiments/local-compress && bash measure-dpu.sh --v2'"],
+            ["ssh", "cloud-48", "ssh bf-pcie 'cd dpu-coprocessing-artifacts/experiments/local-compress && bash measure-dpu.sh --v2'"],
             stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, check=True
         )
         logger.info("✔ bf2 (DOCA) completed")
@@ -364,7 +377,7 @@ def run_compress() -> None:
             shutil.move(os.path.join(src_dir, entry), os.path.join(dst_dir, entry))
     try:  # bf2-host
         subprocess.run(
-            ["scp", "cloud-48:dpu-paper/experiments/local-compress/build/results/bf2-host/cpu*.csv",
+            ["scp", "cloud-48:dpu-coprocessing-artifacts/experiments/local-compress/build/results/bf2-host/cpu*.csv",
              "scripts/tex/figures/results/bf2-host/"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, check=True
         )
     except subprocess.CalledProcessError as e:
@@ -372,7 +385,7 @@ def run_compress() -> None:
         return
     try:  # bf3-dpu
         subprocess.run(
-            ["scp", "bf-pcie:dpu-paper/experiments/local-compress/build/results/bf3-dpu/cpu*.csv",
+            ["scp", "bf-pcie:dpu-coprocessing-artifacts/experiments/local-compress/build/results/bf3-dpu/cpu*.csv",
              "scripts/tex/figures/results/bf3/"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, check=True
         )
     except subprocess.CalledProcessError as e:
@@ -380,14 +393,14 @@ def run_compress() -> None:
         return
     try:  # bf2-dpu (double ssh) from cloud-48
         subprocess.run(
-            ["ssh", "cloud-48", "cd dpu-paper && scp bf-pcie:dpu-paper/experiments/local-compress/build/results/bf2-dpu/cpu*.csv scripts/tex/figures/results/bf2/"], 
+            ["ssh", "cloud-48", "cd dpu-coprocessing-artifacts && scp bf-pcie:dpu-coprocessing-artifacts/experiments/local-compress/build/results/bf2-dpu/cpu*.csv scripts/tex/figures/results/bf2/"], 
             stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, check=True)
     except subprocess.CalledProcessError as e:
         logger.warning(f"Copying compress results from bf2-dpu to cloud-48 failed with exit code {e.returncode}")
         return
     try:  # bf2-dpu (double ssh) from cloud-48
         subprocess.run(
-            ["scp", "cloud-48:dpu-paper/scripts/tex/figures/results/bf2/cpu*.csv",
+            ["scp", "cloud-48:dpu-coprocessing-artifacts/scripts/tex/figures/results/bf2/cpu*.csv",
              "scripts/tex/figures/results/bf2/"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, check=True
         )
     except subprocess.CalledProcessError as e:
@@ -396,7 +409,7 @@ def run_compress() -> None:
     # gather data for DOCA
     try:  # bf3-dpu
         subprocess.run(
-            ["scp", "bf-pcie:dpu-paper/experiments/local-compress/build/results/doca/*.csv",
+            ["scp", "bf-pcie:dpu-coprocessing-artifacts/experiments/local-compress/build/results/doca/*.csv",
              "scripts/tex/figures/results/bf3/"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, check=True
         )
     except subprocess.CalledProcessError as e:
@@ -404,14 +417,14 @@ def run_compress() -> None:
         return
     try:  # bf2-dpu (double ssh) from cloud-48
         subprocess.run(
-            ["ssh", "cloud-48", "cd dpu-paper && scp bf-pcie:dpu-paper/experiments/local-compress/build/results/doca/*.csv scripts/tex/figures/results/bf2/"], 
+            ["ssh", "cloud-48", "cd dpu-coprocessing-artifacts && scp bf-pcie:dpu-coprocessing-artifacts/experiments/local-compress/build/results/doca/*.csv scripts/tex/figures/results/bf2/"], 
             stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, check=True)
     except subprocess.CalledProcessError as e:
         logger.warning(f"Copying DOCA results from bf2 to cloud-48 failed with exit code {e.returncode}")
         return
     try:  # bf2-dpu (double ssh) from cloud-48
         subprocess.run(
-            ["scp", "cloud-48:dpu-paper/scripts/tex/figures/results/bf2/measurements*.csv",
+            ["scp", "cloud-48:dpu-coprocessing-artifacts/scripts/tex/figures/results/bf2/measurements*.csv",
              "scripts/tex/figures/results/bf2/"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, check=True
         )
     except subprocess.CalledProcessError as e:
@@ -452,7 +465,7 @@ def figures_compress() -> None:
     # CPU results, both hosts and DPUs
     cols_to_drop = ['codec', 'param', 'cmem', 'dmem', 'cstack', 'dstack', 'time']
     # Get all names from the dirs
-    cpu_per_device_results = {d: {"dflt": [], "libdeflate": [], "lz4": []} for d in os.listdir(base_path) if os.path.isdir(os.path.join(base_path, d))}
+    cpu_per_device_results = {d: {"dflt": [], "libdeflate": [], "lz4": []} for d in ["bf2", "bf3", "bf2-host", "bf3-host"]}
     for device in cpu_per_device_results.keys():
         current_dir = os.path.join(base_path, device)
         orig_cpu_csv_paths = glob.glob(f'{current_dir}/cpu-orig*.csv')
@@ -843,15 +856,15 @@ def run_coprocess() -> None:
     os.chdir("../experiments/co-processing")
     try:  # bf2-host compress
         subprocess.run(
-            ["ssh", "cloud-48", "rm -rf dpu-paper/experiments/co-processing/results-*.json"],
+            ["ssh", "cloud-48", "rm -rf dpu-coprocessing-artifacts/experiments/co-processing/results-*.json"],
             stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, check=True
         )
         subprocess.run(
-            ["ssh", "cloud-48", "rm -rf dpu-paper/experiments/co-processing/results-*.size"],
+            ["ssh", "cloud-48", "rm -rf dpu-coprocessing-artifacts/experiments/co-processing/results-*.size"],
             stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, check=True
         )
         subprocess.run(
-            ["ssh", "cloud-48", "cd dpu-paper/experiments/co-processing && bash measure-compress.sh"],
+            ["ssh", "cloud-48", "cd dpu-coprocessing-artifacts/experiments/co-processing && bash measure-compress.sh"],
             stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, check=True
         )
         logger.info("✔ bf2-host compress completed")
@@ -860,19 +873,19 @@ def run_coprocess() -> None:
         return
     try:  # bf2-host, copy and clean
         subprocess.run(
-            ["scp", "cloud-48:dpu-paper/experiments/co-processing/results-*.json",
+            ["scp", "cloud-48:dpu-coprocessing-artifacts/experiments/co-processing/results-*.json",
              "../../scripts/tex/figures/results/coprocess/compress/bf2/"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, check=True
         )
         subprocess.run(
-            ["scp", "cloud-48:dpu-paper/experiments/co-processing/results-*.size",
+            ["scp", "cloud-48:dpu-coprocessing-artifacts/experiments/co-processing/results-*.size",
              "../../scripts/tex/figures/results/coprocess/compress/bf2/"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, check=True
         )
         subprocess.run(
-            ["ssh", "cloud-48", "rm -rf dpu-paper/experiments/co-processing/results-*.json"],
+            ["ssh", "cloud-48", "rm -rf dpu-coprocessing-artifacts/experiments/co-processing/results-*.json"],
             stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, check=True
         )
         subprocess.run(
-            ["ssh", "cloud-48", "rm -rf dpu-paper/experiments/co-processing/results-*.size"],
+            ["ssh", "cloud-48", "rm -rf dpu-coprocessing-artifacts/experiments/co-processing/results-*.size"],
             stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, check=True
         )
         logger.info("✔ bf2-host CPU compress copied")
@@ -881,11 +894,11 @@ def run_coprocess() -> None:
         return
     try:  # bf2-dpu (CPU) compress
         subprocess.run(
-            ["ssh", "cloud-48", "ssh bf-pcie 'cd dpu-paper/experiments/co-processing && rm -rf *.size *.json'"],
+            ["ssh", "cloud-48", "ssh bf-pcie 'cd dpu-coprocessing-artifacts/experiments/co-processing && rm -rf *.size *.json'"],
             stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, check=True
         )
         subprocess.run(
-            ["ssh", "cloud-48", "ssh bf-pcie 'cd dpu-paper/experiments/co-processing && bash measure-compress.sh --arm'"],
+            ["ssh", "cloud-48", "ssh bf-pcie 'cd dpu-coprocessing-artifacts/experiments/co-processing && bash measure-compress.sh --arm'"],
             stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, check=True
         )
         logger.info("✔ bf2-dpu CPU compress completed")
@@ -894,29 +907,29 @@ def run_coprocess() -> None:
         return
     try:  # bf2-dpu from cloud-48
         subprocess.run( # first from bf -> cloud-48
-            ["ssh", "cloud-48", "cd dpu-paper && scp bf-pcie:dpu-paper/experiments/co-processing/results-*.json ."], 
+            ["ssh", "cloud-48", "cd dpu-coprocessing-artifacts && scp bf-pcie:dpu-coprocessing-artifacts/experiments/co-processing/results-*.json ."], 
             stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, check=True)
         subprocess.run(
-            ["ssh", "cloud-48", "cd dpu-paper && scp bf-pcie:dpu-paper/experiments/co-processing/results-*.size ."], 
+            ["ssh", "cloud-48", "cd dpu-coprocessing-artifacts && scp bf-pcie:dpu-coprocessing-artifacts/experiments/co-processing/results-*.size ."], 
             stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, check=True)
         subprocess.run(
-            ["ssh", "cloud-48", "ssh bf-pcie 'cd dpu-paper/experiments/co-processing && rm -rf *.size *.json'"],
+            ["ssh", "cloud-48", "ssh bf-pcie 'cd dpu-coprocessing-artifacts/experiments/co-processing && rm -rf *.size *.json'"],
             stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, check=True
         )
         subprocess.run(
-            ["scp", "cloud-48:dpu-paper/results-*.json",
+            ["scp", "cloud-48:dpu-coprocessing-artifacts/results-*.json",
              "../../scripts/tex/figures/results/coprocess/compress/bf2-arm/"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, check=True
         )
         subprocess.run( # second from cloud-48 -> sr675
-            ["scp", "cloud-48:dpu-paper/results-*.size",
+            ["scp", "cloud-48:dpu-coprocessing-artifacts/results-*.size",
              "../../scripts/tex/figures/results/coprocess/compress/bf2-arm/"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, check=True
         )
         subprocess.run(
-            ["ssh", "cloud-48", "rm -rf dpu-paper/results-*.json"],
+            ["ssh", "cloud-48", "rm -rf dpu-coprocessing-artifacts/results-*.json"],
             stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, check=True
         )
         subprocess.run(
-            ["ssh", "cloud-48", "rm -rf dpu-paper/results-*.size"],
+            ["ssh", "cloud-48", "rm -rf dpu-coprocessing-artifacts/results-*.size"],
             stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, check=True
         )
         logger.info("✔ bf2-dpu CPU compress copied")
@@ -925,15 +938,15 @@ def run_coprocess() -> None:
         return
     try:  # bf2-host decompress deflate
         subprocess.run(
-            ["ssh", "cloud-48", "rm -rf dpu-paper/experiments/co-processing/results-*.json"],
+            ["ssh", "cloud-48", "rm -rf dpu-coprocessing-artifacts/experiments/co-processing/results-*.json"],
             stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, check=True
         )
         subprocess.run(
-            ["ssh", "cloud-48", "rm -rf dpu-paper/experiments/co-processing/results-*.size"],
+            ["ssh", "cloud-48", "rm -rf dpu-coprocessing-artifacts/experiments/co-processing/results-*.size"],
             stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, check=True
         )
         subprocess.run(
-            ["ssh", "cloud-48", "cd dpu-paper/experiments/co-processing && bash measure-decompress-deflate.sh --v2"],
+            ["ssh", "cloud-48", "cd dpu-coprocessing-artifacts/experiments/co-processing && bash measure-decompress-deflate.sh --v2"],
             stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, check=True
         )
         logger.info("✔ bf2-host decompress-deflate completed")
@@ -942,19 +955,19 @@ def run_coprocess() -> None:
         return
     try:  # bf2-host, copy and clean
         subprocess.run(
-            ["scp", "cloud-48:dpu-paper/experiments/co-processing/results-*.json",
+            ["scp", "cloud-48:dpu-coprocessing-artifacts/experiments/co-processing/results-*.json",
              "../../scripts/tex/figures/results/coprocess/decompress-deflate/bf2/"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, check=True
         )
         subprocess.run(
-            ["scp", "cloud-48:dpu-paper/experiments/co-processing/results-*.size",
+            ["scp", "cloud-48:dpu-coprocessing-artifacts/experiments/co-processing/results-*.size",
              "../../scripts/tex/figures/results/coprocess/decompress-deflate/bf2/"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, check=True
         )
         subprocess.run(
-            ["ssh", "cloud-48", "rm -rf dpu-paper/experiments/co-processing/results-*.json"],
+            ["ssh", "cloud-48", "rm -rf dpu-coprocessing-artifacts/experiments/co-processing/results-*.json"],
             stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, check=True
         )
         subprocess.run(
-            ["ssh", "cloud-48", "rm -rf dpu-paper/experiments/co-processing/results-*.size"],
+            ["ssh", "cloud-48", "rm -rf dpu-coprocessing-artifacts/experiments/co-processing/results-*.size"],
             stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, check=True
         )
         logger.info("✔ bf2-host CPU decompress-deflate copied")
@@ -963,11 +976,11 @@ def run_coprocess() -> None:
         return
     try:  # bf2-dpu (CPU) decompress deflate
         subprocess.run(
-            ["ssh", "cloud-48", "ssh bf-pcie 'cd dpu-paper/experiments/co-processing && rm -rf *.size *.json'"],
+            ["ssh", "cloud-48", "ssh bf-pcie 'cd dpu-coprocessing-artifacts/experiments/co-processing && rm -rf *.size *.json'"],
             stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, check=True
         )
         subprocess.run(
-            ["ssh", "cloud-48", "ssh bf-pcie 'cd dpu-paper/experiments/co-processing && bash measure-decompress-deflate.sh --arm --v2'"],
+            ["ssh", "cloud-48", "ssh bf-pcie 'cd dpu-coprocessing-artifacts/experiments/co-processing && bash measure-decompress-deflate.sh --arm --v2'"],
             stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, check=True
         )
         logger.info("✔ bf2-dpu CPU decompress-deflate completed")
@@ -976,25 +989,25 @@ def run_coprocess() -> None:
         return
     try:  # bf2-dpu from cloud-48
         subprocess.run( # first from bf -> cloud-48
-            ["ssh", "cloud-48", "cd dpu-paper && scp bf-pcie:dpu-paper/experiments/co-processing/results-*.json ."], 
+            ["ssh", "cloud-48", "cd dpu-coprocessing-artifacts && scp bf-pcie:dpu-coprocessing-artifacts/experiments/co-processing/results-*.json ."], 
             stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, check=True)
         subprocess.run(
-            ["ssh", "cloud-48", "cd dpu-paper && scp bf-pcie:dpu-paper/experiments/co-processing/results-*.size ."], 
+            ["ssh", "cloud-48", "cd dpu-coprocessing-artifacts && scp bf-pcie:dpu-coprocessing-artifacts/experiments/co-processing/results-*.size ."], 
             stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, check=True)
         subprocess.run(
-            ["scp", "cloud-48:dpu-paper/results-*.json",
+            ["scp", "cloud-48:dpu-coprocessing-artifacts/results-*.json",
              "../../scripts/tex/figures/results/coprocess/decompress-deflate/bf2-arm/"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, check=True
         )
         subprocess.run( # second from cloud-48 -> sr675
-            ["scp", "cloud-48:dpu-paper/results-*.size",
+            ["scp", "cloud-48:dpu-coprocessing-artifacts/results-*.size",
              "../../scripts/tex/figures/results/coprocess/decompress-deflate/bf2-arm/"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, check=True
         )
         subprocess.run(
-            ["ssh", "cloud-48", "rm -rf dpu-paper/results-*.json"],
+            ["ssh", "cloud-48", "rm -rf dpu-coprocessing-artifacts/results-*.json"],
             stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, check=True
         )
         subprocess.run(
-            ["ssh", "cloud-48", "rm -rf dpu-paper/results-*.size"],
+            ["ssh", "cloud-48", "rm -rf dpu-coprocessing-artifacts/results-*.size"],
             stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, check=True
         )
         logger.info("✔ bf2-dpu CPU decompress-deflate copied")
@@ -1029,15 +1042,15 @@ def run_coprocess() -> None:
         return
     try:  # bf3-dpu (CPU) decompress deflate
         subprocess.run(
-            ["ssh", "bf-pcie", "rm -rf dpu-paper/experiments/co-processing/results-*.json"],
+            ["ssh", "bf-pcie", "rm -rf dpu-coprocessing-artifacts/experiments/co-processing/results-*.json"],
             stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, check=True
         )
         subprocess.run(
-            ["ssh", "bf-pcie", "rm -rf dpu-paper/experiments/co-processing/results-*.size"],
+            ["ssh", "bf-pcie", "rm -rf dpu-coprocessing-artifacts/experiments/co-processing/results-*.size"],
             stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, check=True
         )
         subprocess.run( # TODO: adjust script dir to artifacts
-            ["ssh", "bf-pcie", "cd dpu-paper/experiments/co-processing && bash measure-decompress-deflate.sh --arm --v3"],
+            ["ssh", "bf-pcie", "cd dpu-coprocessing-artifacts/experiments/co-processing && bash measure-decompress-deflate.sh --arm --v3"],
             stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, check=True
         )
         logger.info("✔ bf3-dpu (CPU) decompress-deflate completed")
@@ -1046,21 +1059,21 @@ def run_coprocess() -> None:
         return
     try:
         subprocess.run(
-            ["scp", "bf-pcie:dpu-paper/experiments/co-processing/results-*.json",
+            ["scp", "bf-pcie:dpu-coprocessing-artifacts/experiments/co-processing/results-*.json",
             "../../scripts/tex/figures/results/coprocess/decompress-deflate/bf3-arm/"], 
             stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, check=True
         )
         subprocess.run(
-            ["scp", "bf-pcie:dpu-paper/experiments/co-processing/results-*.size",
+            ["scp", "bf-pcie:dpu-coprocessing-artifacts/experiments/co-processing/results-*.size",
             "../../scripts/tex/figures/results/coprocess/decompress-deflate/bf3-arm/"], 
             stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, check=True
         )
         subprocess.run(
-            ["ssh", "bf-pcie", "rm -rf dpu-paper/experiments/co-processing/results-*.json"],
+            ["ssh", "bf-pcie", "rm -rf dpu-coprocessing-artifacts/experiments/co-processing/results-*.json"],
             stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, check=True
         )
         subprocess.run(
-            ["ssh", "bf-pcie", "rm -rf dpu-paper/experiments/co-processing/results-*.size"],
+            ["ssh", "bf-pcie", "rm -rf dpu-coprocessing-artifacts/experiments/co-processing/results-*.size"],
             stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, check=True
         )
         logger.info("✔ bf3-dpu (CPU) decompress deflate copied")
@@ -1095,15 +1108,15 @@ def run_coprocess() -> None:
         return
     try:  # bf3-dpu (CPU) decompress lz4
         subprocess.run(
-            ["ssh", "bf-pcie", "rm -rf dpu-paper/experiments/co-processing/results-*.json"],
+            ["ssh", "bf-pcie", "rm -rf dpu-coprocessing-artifacts/experiments/co-processing/results-*.json"],
             stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, check=True
         )
         subprocess.run(
-            ["ssh", "bf-pcie", "rm -rf dpu-paper/experiments/co-processing/results-*.size"],
+            ["ssh", "bf-pcie", "rm -rf dpu-coprocessing-artifacts/experiments/co-processing/results-*.size"],
             stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, check=True
         )
         subprocess.run( # TODO: adjust script dir to artifacts
-            ["ssh", "bf-pcie", "cd dpu-paper/experiments/co-processing && bash measure-decompress-lz4.sh --arm"],
+            ["ssh", "bf-pcie", "cd dpu-coprocessing-artifacts/experiments/co-processing && bash measure-decompress-lz4.sh --arm"],
             stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, check=True
         )
         logger.info("✔ bf3-dpu (CPU) decompress lz4 completed")
@@ -1112,21 +1125,21 @@ def run_coprocess() -> None:
         return
     try:
         subprocess.run(
-            ["scp", "bf-pcie:dpu-paper/experiments/co-processing/results-*.json",
+            ["scp", "bf-pcie:dpu-coprocessing-artifacts/experiments/co-processing/results-*.json",
             "../../scripts/tex/figures/results/coprocess/decompress-lz4/bf3-arm/"], 
             stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, check=True
         )
         subprocess.run(
-            ["scp", "bf-pcie:dpu-paper/experiments/co-processing/results-*.size",
+            ["scp", "bf-pcie:dpu-coprocessing-artifacts/experiments/co-processing/results-*.size",
             "../../scripts/tex/figures/results/coprocess/decompress-lz4/bf3-arm/"], 
             stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, check=True
         )
         subprocess.run(
-            ["ssh", "bf-pcie", "rm -rf dpu-paper/experiments/co-processing/results-*.json"],
+            ["ssh", "bf-pcie", "rm -rf dpu-coprocessing-artifacts/experiments/co-processing/results-*.json"],
             stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, check=True
         )
         subprocess.run(
-            ["ssh", "bf-pcie", "rm -rf dpu-paper/experiments/co-processing/results-*.size"],
+            ["ssh", "bf-pcie", "rm -rf dpu-coprocessing-artifacts/experiments/co-processing/results-*.size"],
             stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, check=True
         )
         logger.info("✔ bf3-dpu (CPU) decompress lz4 copied")
@@ -1533,103 +1546,6 @@ def figures_coprocess() -> None:
     # results dir
     dir = "decompress-lz4"
     # devices
-    devices = ["bf3"]
-
-    # Dictionary to store results indexed by (i, j)
-    results = {device: {} for device in devices}
-    reconfiguration_results = {device: {} for device in devices}
-
-    # averages for plotting
-    averaged_results = {device: {} for device in devices}
-
-    # Pattern to match results
-    cpu_pattern = re.compile(r"results-(\d+)-(\d+)-(.+)-cpu-decompress-lz4\.json")
-    doca_pattern = re.compile(r"results-(\d+)-(\d+)-(.+)-doca-decompress-lz4\.json")
-
-    # Load all matching JSON files
-    for device in devices:
-        for file in glob.glob(f"{dir}/{device}/results-*-*-*-cpu-decompress-lz4.json"):
-            match = cpu_pattern.match(os.path.basename(file))
-            if match:
-                i, j, filename = match.groups()
-                i, j = int(i), int(j)  # Convert i, j to integers
-
-                # Read JSON content
-                with open(file, "r") as f:
-                    data = json.load(f)
-
-                with open(f"{dir}/{device}/results-{i}-{j}-{filename}.size", 'r') as ssize:
-                    full_file_size = int(ssize.readline().strip().split()[-1])
-
-                # Store in results dictionary, use doca as "sharing percentage"
-                key = j
-                if key not in results[device]:
-                    results[device][key] = []
-
-                if key not in reconfiguration_results[device]:
-                        reconfiguration_results[device][key] = []
-
-                joined_runtime_seconds = float(data["joined_submission_elapsed"])
-
-                if 0 < i < 100:
-                    with open(f"{dir}/{device}/results-{i}-{j}-{filename}-doca-decompress-lz4.json", "r") as f:
-                        data = json.load(f)
-                    
-                    reconfiguration_runtime_seconds = float(data["overall_submission_elapsed"]) + float(data["ctx_stop_elapsed"])
-                    reconfiguration_runtime_seconds = max(joined_runtime_seconds, reconfiguration_runtime_seconds)
-                    reconfiguration_results[device][key].append((full_file_size / 1_048_576) / reconfiguration_runtime_seconds)
-                elif i == 100:
-                    reconfiguration_results[device][key].append((full_file_size / 1_048_576) / joined_runtime_seconds)
-
-                results[device][key].append((full_file_size / 1_048_576) / joined_runtime_seconds)
-        
-        # no cpu file, only dpu
-        for file in glob.glob(f"{dir}/{device}/results-0-100-*-doca-decompress-lz4.json"):
-            match = doca_pattern.match(os.path.basename(file))
-            if match:
-                i, j, filename = match.groups()
-                i, j = int(i), int(j)  # Convert i, j to integers
-    
-                # Read JSON content
-                with open(file, "r") as f:
-                    data = json.load(f)
-
-                with open(f"{dir}/{device}/results-{i}-{j}-{filename}.size", 'r') as ssize:
-                    full_file_size = int(ssize.readline().strip().split()[-1])
-
-                # Store in results dictionary, use doca as "sharing percentage"
-                key = j
-                if key not in results[device]:
-                    results[device][key] = []
-
-                joined_runtime_seconds = float(data["joined_submission_elapsed"])
-                results[device][key].append((full_file_size / 1_048_576) / joined_runtime_seconds)
-
-                if key not in reconfiguration_results[device]:
-                    reconfiguration_results[device][key] = []
-
-                reconfiguration_runtime_seconds = float(data["overall_submission_elapsed"]) + float(data["ctx_stop_elapsed"])
-                reconfiguration_runtime_seconds = max(joined_runtime_seconds, reconfiguration_runtime_seconds)
-                reconfiguration_results[device][key].append((full_file_size / 1_048_576) / reconfiguration_runtime_seconds)
-
-        averaged_results[device] = {key: {"static": 0, "reconfiguration": 0} for key in results[device].keys()}
-        for key in results[device].keys():
-            key_avg = sum(results[device][key]) / len(results[device][key])
-            averaged_results[device][key]["static"] = key_avg
-            reconfiguration_key_avg = sum(reconfiguration_results[device][key]) / len(reconfiguration_results[device][key])
-            averaged_results[device][key]["reconfiguration"] = reconfiguration_key_avg
-    # Write to CSV
-    with open(f"../coprocessing-decompress-lz4-r.csv", "w", newline="") as csvfile:
-        writer = csv.writer(csvfile)
-
-        # Write header
-        writer.writerow(["sharing_percentage", "static", "reconfiguration"])
-
-        # Write rows
-        sorted_keys = sorted(averaged_results["bf3"].keys())
-        for key in sorted_keys: # only bf3 has this item
-            writer.writerow([key, averaged_results["bf3"][key]["static"], averaged_results["bf3"][key]["reconfiguration"]])
-    # devices
     devices = ["bf3-arm"]
 
     # Dictionary to store results indexed by (i, j)
@@ -1727,7 +1643,7 @@ def figures_coprocess() -> None:
         for key in sorted_keys: # only bf3 has this item
             writer.writerow([key, averaged_results["bf3-arm"][key]["static"], averaged_results["bf3-arm"][key]["reconfiguration"]])
     # devices
-    devices = ["host-results"]
+    devices = ["bf3"]
 
     # Dictionary to store results indexed by (i, j)
     results = {device: {} for device in devices}
@@ -1820,9 +1736,9 @@ def figures_coprocess() -> None:
         writer.writerow(["sharing_percentage", "static", "reconfiguration"])
 
         # Write rows
-        sorted_keys = sorted(averaged_results["host-results"].keys())
+        sorted_keys = sorted(averaged_results["bf3"].keys())
         for key in sorted_keys: # only bf3 has this item
-            writer.writerow([key, averaged_results["host-results"][key]["static"], averaged_results["host-results"][key]["reconfiguration"]])
+            writer.writerow([key, averaged_results["bf3"][key]["static"], averaged_results["bf3"][key]["reconfiguration"]])
     # CPU Reduction
     dir = "compress"
     # devices
@@ -1944,24 +1860,169 @@ def figures_coprocess() -> None:
         writer.writerow(["Compr", results_compress["bf2"]['avg_reduction_pct'], -1])
         writer.writerow(["Dec-Defl", results_dflt["bf2"]['avg_reduction_pct'], results_dflt["bf3"]['avg_reduction_pct']])
         writer.writerow(["Dec-LZ4", -1, results_lz4["bf3"]['avg_best_tput_reduction_pct']])
+    os.chdir("../../../..")
 
+def run_interference() -> None:
+    logger.info("Running DMA interference experiments...")
+    try:  # bf3-dpu (CPU)
+        subprocess.run( # TODO: adjust script dir to artifacts
+            ["ssh", "bf-pcie", "cd dpu-coprocessing-artifacts/experiments/switching-interference && bash switch-and-offload-dma.sh"],
+            stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, check=True
+        )
+        logger.info("✔ DMA interference completed")
+    except subprocess.CalledProcessError as e:
+        logger.warning(f"DMA interference failed on bf3-dpu with exit code {e.returncode}")
+        return
+    logger.info("Running DFLT interference experiments...")
+    try:  # bf3-dpu (CPU)
+        subprocess.run( # TODO: adjust script dir to artifacts
+            ["ssh", "bf-pcie", "cd dpu-coprocessing-artifacts/experiments/switching-interference && bash switch-and-offload-decompress-deflate.sh"],
+            stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, check=True
+        )
+        logger.info("✔ DFLT interference completed")
+    except subprocess.CalledProcessError as e:
+        logger.warning(f"DFLT interference failed on bf3-dpu with exit code {e.returncode}")
+        return
+    logger.info("Running LZ4 interference experiments...")
+    try:  # bf3-dpu (CPU)
+        subprocess.run( # TODO: adjust script dir to artifacts
+            ["ssh", "bf-pcie", "cd dpu-coprocessing-artifacts/experiments/switching-interference && bash switch-and-offload-decompress-lz4.sh"],
+            stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, check=True
+        )
+        logger.info("✔ LZ4 interference completed")
+    except subprocess.CalledProcessError as e:
+        logger.warning(f"LZ4 interference failed on bf3-dpu with exit code {e.returncode}")
+        return
+    logger.info("✔ interference experiments completed")
+    logger.info("Collecting latest results...")
+    REMOTE_DIR="dpu-coprocessing-artifacts/experiments/switching-interference"
+    patterns = [
+        "iperf_srv_decomp_dflt_throughput_*.json",
+        "iperf_srv_decomp_dflt_latency_*.json",
+        "iperf_srv_decomp_lz4_throughput_*.json",
+        "iperf_srv_decomp_lz4_latency_*.json",
+        "iperf_srv_dma_throughput_*.json",
+        "iperf_srv_dma_latency_*.json",
+    ]
+    remote_files = []
+    for pattern in patterns:
+        remote_cmd = (
+            f"ls -1t {REMOTE_DIR}/results/bf3/{pattern} 2>/dev/null | head -n 1"
+        )
+
+        try:
+            result = subprocess.run(
+                ["ssh", "bf-pcie", remote_cmd],
+                capture_output=True, text=True, check=True,
+            )
+        except subprocess.CalledProcessError as e:
+            logger.warning(f"Collecting latest for {pattern} failed with exit code {e.returncode}")
+            return
+
+        newest = result.stdout.strip()
+        if not newest:
+            logger.warning(f"No file found for pattern: {pattern}")
+            return
+
+        remote_files.append(f"bf-pcie:{newest}")
+
+    if len(remote_files) != len(patterns):
+        raise RuntimeError(
+            f"Expected {len(patterns)} files, found {len(remote_files)}:\n" +
+            "\n".join(remote_files)
+        )
+
+    try:
+        subprocess.run(
+            ["rsync", "-av", *remote_files, "tex/figures/results/bf3"],
+            stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, check=True
+        )
+        logger.info("✔ collected results")
+    except subprocess.CalledProcessError as e:
+        logger.warning(f"Collecting all results failed with exit code {e.returncode}")
+        return
+
+def figures_interference() -> None:
+    TIMESTAMP_RE = re.compile(r"_(\d{8}-\d{6})\.json$")
+
+    def extract_timestamp(path: str) -> datetime:
+        name = os.path.basename(path)
+        match = TIMESTAMP_RE.search(name)
+        if not match:
+            raise ValueError(f"Could not extract timestamp from filename: {path}")
+        return datetime.strptime(match.group(1), "%Y%m%d-%H%M%S")
+
+
+    def newest_file_by_name(pattern: str) -> str:
+        matches = glob.glob(pattern)
+        if not matches:
+            raise FileNotFoundError(f"No files matched pattern: {pattern}")
+        return max(matches, key=extract_timestamp)
+
+
+    def extract_series(json_files: list[str], metric: str, scale: float = 1.0) -> list[list[float]]:
+        all_series = []
+        for path in json_files:
+            with open(path) as f:
+                data = json.load(f)
+            series = [interval["streams"][0][metric] / scale for interval in data["intervals"]]
+            all_series.append(series)
+        return all_series
+
+
+    def write_wide_csv(filename: str, labels: list[str], all_series: list[list[float]]) -> None:
+        num_points = len(all_series[0])
+        with open(filename, "w", newline="") as f:
+            writer = csv.writer(f)
+            writer.writerow(["Time"] + labels)
+            for t in range(num_points):
+                writer.writerow([t + 1] + [series[t] for series in all_series])
+
+
+    local_results_dir = "tex/figures/results/bf3"
+    cases = [
+        ("DMA", "dma"),
+        ("DFLT", "decomp_dflt"),
+        ("LZ4", "decomp_lz4"),
+    ]
+
+    throughput_files = [
+        newest_file_by_name(f"{local_results_dir}/iperf_srv_{suffix}_throughput_*.json")
+        for _, suffix in cases
+    ]
+
+    latency_files = [
+        newest_file_by_name(f"{local_results_dir}/iperf_srv_{suffix}_latency_*.json")
+        for _, suffix in cases
+    ]
+
+    labels = [label for label, _ in cases]
+
+    all_bps = extract_series(throughput_files, "bits_per_second", scale=1e9)
+    write_wide_csv("tex/figures/results/iperf_dpu_throughput.csv", labels, all_bps)
+
+    all_jitter = extract_series(latency_files, "jitter_ms")
+    write_wide_csv("tex/figures/results/iperf_dpu_latency.csv", labels, all_jitter)
 
 EXPERIMENT_ARGS_AND_HELP = {
     "dma": "Run DMA bi-directional experiments (on host and dpu).",
     "compress": "Run (de)compress experiments (on host and dpu).",
-    "coprocess": "Run co-processing experiments (on host and dpu)."
+    "coprocess": "Run co-processing experiments (on host and dpu).",
+    "interference": "Run interference experiments (on dpu)."
 }
 
 EXPERIMENT_RUNNERS = {
     "dma": run_dma,
     "compress": run_compress,
-    "coprocess": run_coprocess
+    "coprocess": run_coprocess,
+    "interference": run_interference
 }
 
 EXPERIMENT_FIGURES = {
     "dma": figures_dma,
     "compress": figures_compress,
-    "coprocess": figures_coprocess
+    "coprocess": figures_coprocess,
+    "interference": figures_interference
 }
 
 def build_pdf() -> None:
@@ -2020,6 +2081,8 @@ if __name__ == '__main__':
         requested = list(EXPERIMENT_ARGS_AND_HELP.keys())
     else:
         requested = [name for name in EXPERIMENT_ARGS_AND_HELP if getattr(args, name)]
+
+    setup_host()
 
     for name in requested:
         if not args.only_figs:

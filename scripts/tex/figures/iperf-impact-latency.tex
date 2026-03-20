@@ -1,0 +1,51 @@
+\begin{tikzpicture}
+
+    \begin{axis}[
+        width=\columnwidth,
+        height=1.72cm, % Keep the height as required
+        scale only axis,
+        scaled y ticks = false,
+        yticklabel style = { /pgf/number format/fixed, /pgf/number format/precision=2 },
+        xlabel=Time (s),
+        ylabel=Latency (ms),
+        xlabel style={yshift=3pt},   % move X label closer to the axis
+        ymin=0,
+        ymax=0.03,
+        xmin=0,
+        ymajorgrids=true,
+        xmajorgrids=true,
+        style={xshift=0pt,yshift=0pt},
+        no markers
+    ]
+
+    % Read the CSV table into a pgfplots data structure.
+    \pgfplotstableread[col sep=comma]{figures/results/iperf_dpu_latency.csv}\datatable
+
+    % Plot each device/hardware column as a separate line.
+    \addplot table [x=Time, y=DMA] {\datatable};
+    % \addlegendentry{DMA}
+
+    \addplot table [x=Time, y=DFLT] {\datatable};
+    % \addlegendentry{DFLT}
+
+    \addplot table [x=Time, y=LZ4] {\datatable};
+    % \addlegendentry{LZ4}
+
+    % Vertical lines
+    \addplot [
+        color=black,
+        dashed,
+        thick,
+    ] coordinates {(4,0) (4,0.03)};
+    \addplot [
+        color=black,
+        dashed,
+        thick,
+    ] coordinates {(21,0) (21,0.03)};
+  \end{axis}
+
+  % === Overlay labels manually, adjust (x,y) by trial ===
+%   \node[anchor=west, font=\footnotesize] at (1.8cm, 1.3cm) {Offload Start};
+%   \node[anchor=west, font=\footnotesize] at (5.1cm, 1.3cm) {Offload End};
+\end{tikzpicture}
+    

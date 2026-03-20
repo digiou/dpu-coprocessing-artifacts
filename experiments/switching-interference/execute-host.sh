@@ -43,7 +43,7 @@ while [[ $# -gt 0 ]]; do
   esac
 done
 
-cd /local-data/dimitrios/dpu-paper/experiments/co-processing
+cd /local-data-raid1/dimitrios/dpu-coprocessing-artifacts/experiments/co-processing
 filesize=$(stat -c '%s' /dev/shm/input)
 if [ "$run_lz4" = true ]; then
     start=$(date +%s) # current epoch-seconds, run for 10s
